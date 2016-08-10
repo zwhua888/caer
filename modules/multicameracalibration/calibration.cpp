@@ -13,16 +13,18 @@ void MultiCalibration::updateSettings(MultiCalibrationSettings settings) {
     
     // Load calibration files keep this in the constructor
     if(loadCalibrationFile(this->settings)){
-        this->calibrationLoaded = true;
+        this->calibrationLoaded_cam0 = true;
+        this->calibrationLoaded_cam1 = true;
     }else{
-        this->calibrationLoaded = false;
+        this->calibrationLoaded_cam0 = false;
+        this->calibrationLoaded_cam1 = false;
     }
 
 }
 
 bool MultiCalibration::findMarkers(caerFrameEvent frame) {
-    if (frame == NULL || !caerFrameEventIsValid(frame) || this->calibrationLoaded == false) {
-        if(this->calibrationLoaded == false){
+    if (frame == NULL || !caerFrameEventIsValid(frame) || this->calibrationLoaded_cam0 == false) {
+        if(this->calibrationLoaded_cam0 == false){
             caerLog(CAER_LOG_NOTICE, "Multi Calibration findMarkers", "Camera matrix and distorsion coefficients not loaded, exit from filter!");
         }
 	    return (false);
@@ -62,15 +64,15 @@ bool MultiCalibration::findMarkers(caerFrameEvent frame) {
        
     // from camera calibration 
     double fx, fy, m, distance, avr_size, x, object_image_sensor_mm;
-    fx = undistortCameraMatrix.at<double>(0,0);
-    fy = undistortCameraMatrix.at<double>(1,1);
+    fx = undistortCameraMatrix_cam0.at<double>(0,0);
+    fy = undistortCameraMatrix_cam0.at<double>(1,1);
     // from zhang method we ervecs tvecs to 3d pointsstimate pixels per mm (focal lenght))
-    m = ( (fx+fy)/2.0 ) / focal_lenght_mm ;
+    m = ( (fx+fy)/2.0 ) / focal_lenght_mm_cam0 ;
     // estimate markers Multi
     if( ids.size() > 0){
 
         Mat rvecs_board, tvecs_board;
-    	int valid = cv::aruco::estimatePoseBoard(corners, ids, board, undistortCameraMatrix, undistortDistCoeffs, rvecs_board, tvecs_board);
+    	int valid = cv::aruco::estimatePoseBoard(corners, ids, board, undistortCameraMatrix_cam0, undistortDistCoeffs_cam0, rvecs_board, tvecs_board);
 	    caerLog(CAER_LOG_WARNING, "ArucoMultiEstimation ", "Board detected %d\n", valid);
 
 	    //estimate pose board
@@ -94,7 +96,7 @@ bool MultiCalibration::findMarkers(caerFrameEvent frame) {
             axisPoints.push_back(Point3f(0, length, 0));
             axisPoints.push_back(Point3f(0, 0, length));
             vector< Point2f > imagePoints;
-            projectPoints(axisPoints, rvecs_board.col(0).reshape(1).t(), tvecs_board.col(0).reshape(1).t(), undistortCameraMatrix, undistortDistCoeffs, imagePoints);
+            projectPoints(axisPoints, rvecs_board.col(0).reshape(1).t(), tvecs_board.col(0).reshape(1).t(), undistortCameraMatrix_cam0, undistortDistCoeffs_cam0, imagePoints);
             // draw axis lines
             line(view, imagePoints[0], imagePoints[1], Scalar(0, 0, 255), 3);
             line(view, imagePoints[0], imagePoints[2], Scalar(0, 255, 0), 3);
@@ -106,11 +108,11 @@ bool MultiCalibration::findMarkers(caerFrameEvent frame) {
             avr_size = ( p.x + p.y ) / 2.0; //in pixels
             // convert px/mm in the lower resolution
             // camera_max_resolution/m = camera_y_resolution/x
-            x = (camera_y_resolution*m)/camera_y_resolution;
+            x = (camera_y_resolution_cam0*m)/camera_y_resolution_cam0;
             object_image_sensor_mm = avr_size / x ;
             // calculate distance from object
             // distance_mm = object_real_world_mm * focal-length_mm / object_image_sensor_mm
-            distance = object_real_world_mm * focal_lenght_mm / object_image_sensor_mm;
+            distance = object_real_world_mm_cam0 * focal_lenght_mm_cam0 / object_image_sensor_mm;
 
             // Extract 3x3 rotation matrix
             Mat Rot(3,3,CV_32FC1);
@@ -177,7 +179,7 @@ bool MultiCalibration::findMarkers(caerFrameEvent frame) {
 
     //estimate single markers
     Mat rvecs, tvecs;
-    aruco::estimatePoseSingleMarkers(corners, 0.05, undistortCameraMatrix, undistortDistCoeffs, rvecs, tvecs);
+    aruco::estimatePoseSingleMarkers(corners, 0.05, undistortCameraMatrix_cam0, undistortDistCoeffs_cam0, rvecs, tvecs);
 
     // rvecs tvecs tell us where the marker is in camera coordinates [R T; 0 1] (for homogenous coordinates)
     // the inverse is [R^t -R^t*T; 0 1]
@@ -191,7 +193,7 @@ bool MultiCalibration::findMarkers(caerFrameEvent frame) {
         axisPoints.push_back(Point3f(0, length, 0));
         axisPoints.push_back(Point3f(0, 0, length));
         vector< Point2f > imagePoints;
-        projectPoints(axisPoints, rvecs.row(k), tvecs.row(k), undistortCameraMatrix, undistortDistCoeffs, imagePoints);
+        projectPoints(axisPoints, rvecs.row(k), tvecs.row(k), undistortCameraMatrix_cam0, undistortDistCoeffs_cam0, imagePoints);
         // draw axis lines
         line(view, imagePoints[0], imagePoints[1], Scalar(0, 0, 255), 3);
         line(view, imagePoints[0], imagePoints[2], Scalar(0, 255, 0), 3);
@@ -203,11 +205,11 @@ bool MultiCalibration::findMarkers(caerFrameEvent frame) {
         avr_size = ( p.x + p.y ) / 2.0; //in pixels
         // convert px/mm in the lower resolution
         // camera_max_resolution/m = camera_y_resolution/x
-        x = (camera_y_resolution*m)/camera_y_resolution;
+        x = (camera_y_resolution_cam0*m)/camera_y_resolution_cam0;
         object_image_sensor_mm = avr_size / x ;
         // calculate distance from object
         // distance_mm = object_real_world_mm * focal-length_mm / object_image_sensor_mm
-        distance = object_real_world_mm * focal_lenght_mm / object_image_sensor_mm;
+        distance = object_real_world_mm_cam0 * focal_lenght_mm_cam0 / object_image_sensor_mm;
 
         // Extract 3x3 rotation matrix
         Mat Rot(3,3,CV_32FC1);
@@ -264,11 +266,7 @@ bool MultiCalibration::findMarkers(caerFrameEvent frame) {
 				std::isnan(point_3d_back.at<float>(0,3)) ){
         		continue;
             //check for crazy numbers
-        	}else if( abs(point_3d_back.at<float>(0,0)) > settings->rejectDistance ||
-        			  abs(point_3d_back.at<float>(0,1)) > settings->rejectDistance ||
-					  abs(point_3d_back.at<float>(0,2)) > settings->rejectDistance ){
-			   continue;
-			}else if(settings->doSavetxt){
+        	}else if(settings->doSavetxt){
                 ofstream myfile;
                 myfile.open (settings->saveFileName, ofstream::out | ofstream::app); //points_3d.t()
                 myfile << corners[k][this_point] <<  "\t"  << point_3d_back.t() << "\t"
@@ -291,26 +289,40 @@ bool MultiCalibration::findMarkers(caerFrameEvent frame) {
 bool MultiCalibration::loadCalibrationFile(MultiCalibrationSettings settings) {
 
 	// Open file with undistort matrices.
-	FileStorage fs(settings->loadFileName, FileStorage::READ);
-
+	FileStorage fs(settings->loadFileName_cam0, FileStorage::READ);
 	// Check file.
 	if (!fs.isOpened()) {
 		return (false);
 	}
+	fs["camera_matrix"] >> undistortCameraMatrix_cam0;
+	fs["distortion_coefficients"] >> undistortDistCoeffs_cam0;
+	fs["use_fisheye_model"] >> useFisheyeModel_cam0;
+	if (!fs["camera_matrix"].empty() && !fs["distortion_coefficients"].empty())
+	{
+	    caerLog(CAER_LOG_NOTICE, "MultiCalibration CXX loadCalibrationFile()", "Camera matrix and distorsion coefficients succesfully loaded");
+	}else{
+	    caerLog(CAER_LOG_ERROR, "MultiCalibration CXX loadCalibrationFile()", "Camera matrix and distorsion coefficients not loaded");
+	}
+	// Close file.
+	fs.release();
 
-	fs["camera_matrix"] >> undistortCameraMatrix;
-	fs["distortion_coefficients"] >> undistortDistCoeffs;
-	fs["use_fisheye_model"] >> useFisheyeModel;
-
+	// Open file with undistort matrices.
+	FileStorage fss(settings->loadFileName_cam1, FileStorage::READ);
+	// Check file.
+	if (!fss.isOpened()) {
+		return (false);
+	}
+	fss["camera_matrix"] >> undistortCameraMatrix_cam1;
+	fss["distortion_coefficients"] >> undistortDistCoeffs_cam1;
+	fss["use_fisheye_model"] >> useFisheyeModel_cam1;
 	if (!fs["camera_matrix"].empty() && !fs["distortion_coefficients"].empty()) 
 	{
 	    caerLog(CAER_LOG_NOTICE, "MultiCalibration CXX loadCalibrationFile()", "Camera matrix and distorsion coefficients succesfully loaded");
 	}else{
 	    caerLog(CAER_LOG_ERROR, "MultiCalibration CXX loadCalibrationFile()", "Camera matrix and distorsion coefficients not loaded");
 	}    
-	    
 	// Close file.
-	fs.release();
+	fss.release();
 
 	return (true);
 }

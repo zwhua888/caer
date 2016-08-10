@@ -35,14 +35,24 @@ public:
 
 private:
     MultiCalibrationSettings settings = NULL;
-    Mat undistortCameraMatrix;
-    bool useFisheyeModel;
-    Mat undistortDistCoeffs;
-    double focal_lenght_mm = 6;
-    int camera_x_resolution = 260;
-    int camera_y_resolution = 346;
-    double object_real_world_mm = 15; // obejct is 40 mm
-    bool calibrationLoaded = false;
+    Mat undistortCameraMatrix_cam0;
+    bool useFisheyeModel_cam0;
+    Mat undistortDistCoeffs_cam0;
+    double focal_lenght_mm_cam0 = 6;
+    int camera_x_resolution_cam0 = 260;
+    int camera_y_resolution_cam0 = 346;
+    double object_real_world_mm_cam0 = 15; // obejct is 40 mm
+    bool calibrationLoaded_cam0 = false;
+
+    Mat undistortCameraMatrix_cam1;
+    bool useFisheyeModel_cam1;
+    Mat undistortDistCoeffs_cam1;
+    double focal_lenght_mm_cam1 = 6;
+    int camera_x_resolution_cam1 = 260;
+    int camera_y_resolution_cam1 = 346;
+    double object_real_world_mm_cam1 = 15; // obejct is 40 mm
+    bool calibrationLoaded_cam1 = false;
+
 };
 
 #endif /* MULTIESTIMATION_HPP_ */

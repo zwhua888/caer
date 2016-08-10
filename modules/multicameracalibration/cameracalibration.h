@@ -6,6 +6,6 @@
 #include <libcaer/events/polarity.h>
 #include <libcaer/events/frame.h>
 
-void caerMultiCalibration(uint16_t moduleID, caerPolarityEventPacket polarity, caerFrameEventPacket frame);
+void caerMultiCalibration(uint16_t moduleID, caerFrameEventPacket frame_0, caerFrameEventPacket frame_1);
 
 #endif /* POSEESTIMATION_H_ */
