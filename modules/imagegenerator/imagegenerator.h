@@ -15,7 +15,8 @@
 #define CLASSIFY_IMG_DIRECTORY "/tmp/"
 
 //we cut out a quadratic part of the spike image from the rectangular input of the camera
-#define SIZE_QUADRATIC_MAP 180
+#define SIZE_QUADRATIC_MAP_X 346
+#define SIZE_QUADRATIC_MAP_Y 240
 
 void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, char ** file_strings_classify,
 	int max_img_qty, int classify_img_size, char **display_img_ptr, caerFrameEventPacket frame,
