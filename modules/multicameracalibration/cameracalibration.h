@@ -8,4 +8,4 @@
 
 void caerMultiCalibration(uint16_t moduleID, caerFrameEventPacket frame_0, caerFrameEventPacket frame_1);
 
-#endif /* POSEESTIMATION_H_ */
+#endif /* MULTICALIBRATION_H_ */

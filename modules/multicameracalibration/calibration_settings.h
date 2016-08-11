@@ -7,11 +7,17 @@ struct MultiCalibrationSettings_struct {
 	bool doSavetxt;
 	char *saveFileName;
 	uint32_t captureDelay;
-	char *loadFileName_cam0;
-	char *loadFileName_cam1;
+	char *loadFileNames;
+	int nCamera;
+	int patternWidth;
+	int patternHeight;
+	int showFeatureExtraction;
+	int verbose;
+	int nMiniMatches;
+	int cameraType;
 };
 
 typedef struct MultiCalibrationSettings_struct *MultiCalibrationSettings;
 
 
-#endif /* MULTIESTIMATION_SETTINGS_H_ */
+#endif /* MULTICALIBRATION__SETTINGS_H_ */

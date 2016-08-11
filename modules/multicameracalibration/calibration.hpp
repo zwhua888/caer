@@ -1,5 +1,5 @@
-#ifndef MULTIESTIMATION_HPP_
-#define MULTIESTIMATION_HPP_
+#ifndef MULTICALIBRATION_HPP_
+#define MULTICALIBRATION_HPP_
 
 #include <iostream>
 #include <sstream>
@@ -27,7 +27,7 @@ class MultiCalibration {
 
 public:
     MultiCalibration(MultiCalibrationSettings settings);
-    bool findMarkers(caerFrameEvent frame);
+    bool multicalib(caerFrameEvent frame0, caerFrameEvent frame1);
     bool loadCalibrationFile(MultiCalibrationSettings settings);
     void updateSettings(MultiCalibrationSettings settings);
     Point3f convert2dto3dworldunit(Point2f point_in_image);
@@ -42,17 +42,8 @@ private:
     int camera_x_resolution_cam0 = 260;
     int camera_y_resolution_cam0 = 346;
     double object_real_world_mm_cam0 = 15; // obejct is 40 mm
-    bool calibrationLoaded_cam0 = false;
-
-    Mat undistortCameraMatrix_cam1;
-    bool useFisheyeModel_cam1;
-    Mat undistortDistCoeffs_cam1;
-    double focal_lenght_mm_cam1 = 6;
-    int camera_x_resolution_cam1 = 260;
-    int camera_y_resolution_cam1 = 346;
-    double object_real_world_mm_cam1 = 15; // obejct is 40 mm
-    bool calibrationLoaded_cam1 = false;
+    bool calibrationLoaded = false;
 
 };
 
-#endif /* MULTIESTIMATION_HPP_ */
+#endif /* MULTICALIBRATION_HPP_ */

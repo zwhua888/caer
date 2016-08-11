@@ -24,12 +24,12 @@ void multicalibration_updateSettings(MultiCalibration *calibClass) {
 	
 }
 
-bool multicalibration_findMarkers(MultiCalibration *calibClass, caerFrameEvent frame) {
+bool multicalibration_multicalib(MultiCalibration *calibClass, caerFrameEvent frame0, caerFrameEvent frame1) {
 	try {
-		return (calibClass->findMarkers(frame));
+		return (calibClass->multicalib(frame0, frame1));
 	}
 	catch (const std::exception& ex) {
-		caerLog(CAER_LOG_ERROR, "multiCalibration_findMarkers()", "Failed with C++ exception: %s", ex.what());
+		caerLog(CAER_LOG_ERROR, "multiCalibration_multicalib()", "Failed with C++ exception: %s", ex.what());
 		return (false);
 	}
 }

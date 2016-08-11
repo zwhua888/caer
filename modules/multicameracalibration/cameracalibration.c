@@ -41,11 +41,17 @@ static bool caerMultiCalibrationInit(caerModuleData moduleData) {
 	// Create config settings.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doCalibration", false); // Do calibration using live images
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSavetxt", false);
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "saveFileName", "3d_calib_points.txt"); 
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "saveFileName", "multi_camera_results.txt");
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName_cam0", "camera_calib_1.xml"); // The name of the file from which to load the calibration
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName_cam1", "camera_calib_0.xml"); // The name of the file from which to load the calibration
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 500000);
-    sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doCalibrateStick", false);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "nCamera", 2);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "patternWidth", 800);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "patternHeight", 600);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "showFeatureExtraction", 0);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "verbose", 0);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "nMiniMatches", 0);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "cameraType", 0);
 
 	// Update all settings.
 	updateSettings(moduleData);
@@ -70,8 +76,14 @@ static void updateSettings(caerModuleData moduleData) {
     state->settings.doCalibration = sshsNodeGetBool(moduleData->moduleNode, "doCalibration");
     state->settings.doSavetxt = sshsNodeGetBool(moduleData->moduleNode, "doSavetxt");
     state->settings.saveFileName = sshsNodeGetString(moduleData->moduleNode, "saveFileName");
-    state->settings.loadFileName_cam0 = sshsNodeGetString(moduleData->moduleNode, "loadFileName_cam0");
-    state->settings.loadFileName_cam1 = sshsNodeGetString(moduleData->moduleNode, "loadFileName_cam1");
+    state->settings.loadFileNames = sshsNodeGetString(moduleData->moduleNode, "loadFileNames");
+    state->settings.nCamera = sshsNodeGetInt(moduleData->moduleNode, "nCamera");
+    state->settings.patternWidth = sshsNodeGetInt(moduleData->moduleNode, "patternWidth");
+    state->settings.patternHeight = sshsNodeGetInt(moduleData->moduleNode, "patternHeight");
+    state->settings.showFeatureExtraction = sshsNodeGetInt(moduleData->moduleNode, "showFeatureExtraction");
+    state->settings.verbose = sshsNodeGetInt(moduleData->moduleNode, "verbose");
+    state->settings.nMiniMatches = sshsNodeGetInt(moduleData->moduleNode, "nMiniMatches");
+    state->settings.cameraType = sshsNodeGetInt(moduleData->moduleNode, "cameraType");
 
 
 }
@@ -92,8 +104,7 @@ static void caerMultiCalibrationExit(caerModuleData moduleData) {
 	//Multicalibration_destroy(state->cpp_class);
 
 	free(state->settings.saveFileName);
-	free(state->settings.loadFileName_cam0);
-	free(state->settings.loadFileName_cam1);
+	free(state->settings.loadFileNames);
 
 }
 
@@ -115,22 +126,25 @@ static void caerMultiCalibrationRun(caerModuleData moduleData, size_t argsNumber
         // Marker Multi estimation is done only using frames.
 	if (state->settings.doCalibration && frame_0 != NULL && frame_1 != NULL) {
 		CAER_FRAME_ITERATOR_VALID_START(frame_0)
-				CAER_FRAME_ITERATOR_VALID_START(frame_1)
-
 			// Only work on new frames if enough time has passed between this and the last used one.
 			uint64_t currTimestamp_0 = U64T(caerFrameEventGetTSStartOfFrame64(caerFrameIteratorElement, frame_0));
-			uint64_t currTimestamp_1 = U64T(caerFrameEventGetTSStartOfFrame64(caerFrameIteratorElement, frame_1));
-
 			// If enough time has passed, try to add a new point set.
 			if ((currTimestamp_0 - state->lastFrameTimestamp) >= state->settings.captureDelay) {
 				state->lastFrameTimestamp = currTimestamp_0;
 
-				bool foundPoint = multicalibration_findMarkers(state->cpp_class, caerFrameIteratorElement);
+				//bool foundPoint = multicalibration_findMarkers(state->cpp_class, caerFrameIteratorElement);
+				bool foundPoint = false;
 				caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
 					"Searching for markers in the aruco set, result = %d.", foundPoint);
 			}
-			CAER_FRAME_ITERATOR_VALID_END
 		CAER_FRAME_ITERATOR_VALID_END
+
+		CAER_FRAME_ITERATOR_VALID_START(frame_1)
+			uint64_t currTimestamp_1 = U64T(caerFrameEventGetTSStartOfFrame64(caerFrameIteratorElement, frame_1));
+
+		CAER_FRAME_ITERATOR_VALID_END
+
+
 
 	}
 
