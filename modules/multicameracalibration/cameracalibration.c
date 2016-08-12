@@ -26,7 +26,7 @@ static struct caer_module_functions caerMultiCalibrationFunctions = { .moduleIni
 		&caerMultiCalibrationExit };
 
 void caerMultiCalibration(uint16_t moduleID, caerFrameEventPacket frame_0, caerFrameEventPacket frame_1 ) {
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "LaserMultiEstimation", PROCESSOR);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID, "MultiCameraCalibration", PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
@@ -42,16 +42,18 @@ static bool caerMultiCalibrationInit(caerModuleData moduleData) {
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doCalibration", false); // Do calibration using live images
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSavetxt", false);
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "saveFileName", "multi_camera_results.txt");
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName_cam0", "camera_calib_1.xml"); // The name of the file from which to load the calibration
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName_cam1", "camera_calib_0.xml"); // The name of the file from which to load the calibration
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 500000);
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileNames", "camera_calib_1.xml, camera_calib_2.xml"); // The name of the file from which to load the calibration
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 50000);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "nCamera", 2);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "patternWidth", 800);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "patternHeight", 600);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "patternWidth", 8);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "patternHeight", 6);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "showFeatureExtraction", 0);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "verbose", 0);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "nMiniMatches", 0);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "cameraType", 0);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useFisheyeModel", false); // Use Fisheye camera model for calibration
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardWidth", 9); // The size of the board (width)
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardHeigth", 5); // The size of the board (heigth)
 
 	// Update all settings.
 	updateSettings(moduleData);
@@ -84,6 +86,10 @@ static void updateSettings(caerModuleData moduleData) {
     state->settings.verbose = sshsNodeGetInt(moduleData->moduleNode, "verbose");
     state->settings.nMiniMatches = sshsNodeGetInt(moduleData->moduleNode, "nMiniMatches");
     state->settings.cameraType = sshsNodeGetInt(moduleData->moduleNode, "cameraType");
+	state->settings.useFisheyeModel = sshsNodeGetBool(moduleData->moduleNode, "useFisheyeModel");
+	state->settings.boardWidth = U32T(sshsNodeGetInt(moduleData->moduleNode, "boardWidth"));
+	state->settings.boardHeigth = U32T(sshsNodeGetInt(moduleData->moduleNode, "boardHeigth"));
+
 
 
 }
@@ -123,8 +129,13 @@ static void caerMultiCalibrationRun(caerModuleData moduleData, size_t argsNumber
 		state->calibrationLoaded = multicalibration_loadCalibrationFile(state->cpp_class, &state->settings);
 	}
 
-        // Marker Multi estimation is done only using frames.
+        // Multi Camera estimation is done only using frames.
+	// Here we should make sure that the two frames are not too far in time one from each other.
 	if (state->settings.doCalibration && frame_0 != NULL && frame_1 != NULL) {
+
+		bool frame_0_pattern = false;
+		bool frame_1_pattern = false;
+
 		CAER_FRAME_ITERATOR_VALID_START(frame_0)
 			// Only work on new frames if enough time has passed between this and the last used one.
 			uint64_t currTimestamp_0 = U64T(caerFrameEventGetTSStartOfFrame64(caerFrameIteratorElement, frame_0));
@@ -132,20 +143,35 @@ static void caerMultiCalibrationRun(caerModuleData moduleData, size_t argsNumber
 			if ((currTimestamp_0 - state->lastFrameTimestamp) >= state->settings.captureDelay) {
 				state->lastFrameTimestamp = currTimestamp_0;
 
-				//bool foundPoint = multicalibration_findMarkers(state->cpp_class, caerFrameIteratorElement);
-				bool foundPoint = false;
+				bool foundPoint = multicalibration_findNewPoints(state->cpp_class, caerFrameIteratorElement);
 				caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
-					"Searching for markers in the aruco set, result = %d.", foundPoint);
+					"Searching for calibration pattern, result = %d.", foundPoint);
+				if(foundPoint){
+					frame_0_pattern = true;
+				}
 			}
 		CAER_FRAME_ITERATOR_VALID_END
 
 		CAER_FRAME_ITERATOR_VALID_START(frame_1)
-			uint64_t currTimestamp_1 = U64T(caerFrameEventGetTSStartOfFrame64(caerFrameIteratorElement, frame_1));
+			// Only work on new frames if enough time has passed between this and the last used one.
+			uint64_t currTimestamp_0 = U64T(caerFrameEventGetTSStartOfFrame64(caerFrameIteratorElement, frame_1));
+			// If enough time has passed, try to add a new point set.
+			if ((currTimestamp_0 - state->lastFrameTimestamp) >= state->settings.captureDelay) {
+				state->lastFrameTimestamp = currTimestamp_0;
 
+				bool foundPoint = multicalibration_findNewPoints(state->cpp_class, caerFrameIteratorElement);
+				caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
+					"Searching for calibration pattern, result = %d.", foundPoint);
+				if(foundPoint){
+					frame_1_pattern = true;
+				}
+			}
 		CAER_FRAME_ITERATOR_VALID_END
 
-
-
+		if(frame_1_pattern && frame_0_pattern){
+			caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
+								"Both camera have seen the calibration pattern... adding valid points");
+		}
 	}
 
     // update settings

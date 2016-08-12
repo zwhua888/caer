@@ -27,21 +27,25 @@ class MultiCalibration {
 
 public:
     MultiCalibration(MultiCalibrationSettings settings);
+	bool findNewPoints(caerFrameEvent frame);
+	size_t foundPoints(void);
     bool multicalib(caerFrameEvent frame0, caerFrameEvent frame1);
     bool loadCalibrationFile(MultiCalibrationSettings settings);
     void updateSettings(MultiCalibrationSettings settings);
-    Point3f convert2dto3dworldunit(Point2f point_in_image);
-    Point3f getCameraLocation(Mat Rvec,Mat Tvec);
+    Point3f getCamerasLocation(Mat Rvec,Mat Tvec);
 
 private:
     MultiCalibrationSettings settings = NULL;
-    Mat undistortCameraMatrix_cam0;
-    bool useFisheyeModel_cam0;
-    Mat undistortDistCoeffs_cam0;
-    double focal_lenght_mm_cam0 = 6;
-    int camera_x_resolution_cam0 = 260;
-    int camera_y_resolution_cam0 = 346;
-    double object_real_world_mm_cam0 = 15; // obejct is 40 mm
+	Size boardSize;
+	int flag = 0; //fish eye model
+	vector<vector<Point2f> > imagePoints;
+    Mat undistortCameraMatrix;
+    bool useFisheyeModel;
+    Mat undistortDistCoeffs;
+    double focal_lenght_mm = 6;
+    int camera_x_resolution = 260;
+    int camera_y_resolution = 346;
+    double object_real_world_mm = 15; // obejct is 40 mm
     bool calibrationLoaded = false;
 
 };

@@ -11,6 +11,7 @@ MultiCalibration *multicalibration_init(MultiCalibrationSettings settings) {
 	}
 }
 
+
 void multicalibration_destroy(MultiCalibration *calibClass) {
 	try {
 		delete calibClass;
@@ -22,6 +23,16 @@ void multicalibration_destroy(MultiCalibration *calibClass) {
 
 void multicalibration_updateSettings(MultiCalibration *calibClass) {
 	
+}
+
+bool multicalibration_findNewPoints(MultiCalibration *calibClass, caerFrameEvent frame) {
+	try {
+		return (calibClass->findNewPoints(frame));
+	}
+	catch (const std::exception& ex) {
+		caerLog(CAER_LOG_ERROR, "multiCalibration_multicalib()", "Failed with C++ exception: %s", ex.what());
+		return (false);
+	}
 }
 
 bool multicalibration_multicalib(MultiCalibration *calibClass, caerFrameEvent frame0, caerFrameEvent frame1) {

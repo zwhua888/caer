@@ -12,7 +12,7 @@ typedef struct MultiCalibration MultiCalibration;
 MultiCalibration *multicalibration_init(MultiCalibrationSettings settings);
 void multicalibration_destroy(MultiCalibration *calibClass);
 void multicalibration_updateSettings(MultiCalibration *calibClass);
-bool multicalibration_findMarkers(MultiCalibration *calibClass, caerFrameEvent frame);
+bool multicalibration_findNewPoints(MultiCalibration *calibClass, caerFrameEvent frame);
 bool multicalibration_multicalib(MultiCalibration *calibClass, caerFrameEvent frame0, caerFrameEvent frame1);
 bool multicalibration_loadCalibrationFile(MultiCalibration *calibClass, MultiCalibrationSettings settings);
 
