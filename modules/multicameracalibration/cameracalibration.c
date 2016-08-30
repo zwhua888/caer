@@ -90,8 +90,6 @@ static void updateSettings(caerModuleData moduleData) {
 	state->settings.boardWidth = U32T(sshsNodeGetInt(moduleData->moduleNode, "boardWidth"));
 	state->settings.boardHeigth = U32T(sshsNodeGetInt(moduleData->moduleNode, "boardHeigth"));
 
-
-
 }
 
 static void caerMultiCalibrationConfig(caerModuleData moduleData) {
