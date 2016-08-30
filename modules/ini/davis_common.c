@@ -301,16 +301,12 @@ void caerInputDAVISRun(caerModuleData moduleData, size_t argsNumber, va_list arg
 			caerEventPacketContainerGetHighestEventTimestamp(*container));
 
 		// Detect timestamp reset and call all reset functions for processors and outputs.
-		caerSpecialEventPacket special = (caerSpecialEventPacket) caerEventPacketContainerGetEventPacket(*container,
-			SPECIAL_EVENT);
+		caerEventPacketHeader special = caerEventPacketContainerGetEventPacket(*container, SPECIAL_EVENT);
 
-		if (special != NULL) {
-			caerSpecialEvent tsResetEvent = caerSpecialEventPacketFindEventByType(special, TIMESTAMP_RESET);
-
-			if (tsResetEvent != NULL) {
-				caerMainloopResetProcessors();
-				caerMainloopResetOutputs();
-			}
+		if ((special != NULL) && (caerEventPacketHeaderGetEventNumber(special) == 1)
+			&& (caerSpecialEventPacketFindEventByType((caerSpecialEventPacket) special, TIMESTAMP_RESET) != NULL)) {
+			caerMainloopResetProcessors(moduleData->moduleID);
+			caerMainloopResetOutputs(moduleData->moduleID);
 		}
 	}
 }
@@ -473,8 +469,8 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 
 	if (IS_DAVIS128(devInfo->chipID) || IS_DAVIS208(devInfo->chipID) || IS_DAVIS346(devInfo->chipID)
 	|| IS_DAVIS640(devInfo->chipID)|| IS_DAVISRGB(devInfo->chipID)) {
-		// Select which grey counter to use with the internal ADC: '0' means the external grey counter is used, which
-		// has to be supplied off-chip. '1' means the on-chip grey counter is used instead.
+		// Select which gray counter to use with the internal ADC: '0' means the external gray counter is used, which
+		// has to be supplied off-chip. '1' means the on-chip gray counter is used instead.
 		sshsNodePutBoolIfAbsent(chipNode, "SelectGrayCounter", 1);
 	}
 
@@ -676,7 +672,7 @@ static void createDefaultConfiguration(caerModuleData moduleData, struct caer_da
 	sshsNode sysNode = sshsGetRelativeNode(moduleData->moduleNode, "system/");
 
 	// Packet settings (size (in events) and time interval (in µs)).
-	sshsNodePutIntIfAbsent(sysNode, "PacketContainerMaxSize", 8192);
+	sshsNodePutIntIfAbsent(sysNode, "PacketContainerMaxPacketSize", 8192);
 	sshsNodePutIntIfAbsent(sysNode, "PacketContainerMaxInterval", 10000);
 
 	// Ring-buffer setting (only changes value on module init/shutdown cycles).
@@ -2293,8 +2289,8 @@ static void usbConfigListener(sshsNode node, void *userData, enum sshs_node_attr
 }
 
 static void systemConfigSend(sshsNode node, caerModuleData moduleData) {
-	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS, CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_SIZE,
-		U32T(sshsNodeGetInt(node, "PacketContainerMaxSize")));
+	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
+	CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_PACKET_SIZE, U32T(sshsNodeGetInt(node, "PacketContainerMaxPacketSize")));
 	caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
 	CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_INTERVAL, U32T(sshsNodeGetInt(node, "PacketContainerMaxInterval")));
 
@@ -2310,9 +2306,9 @@ static void systemConfigListener(sshsNode node, void *userData, enum sshs_node_a
 	caerModuleData moduleData = userData;
 
 	if (event == ATTRIBUTE_MODIFIED) {
-		if (changeType == INT && caerStrEquals(changeKey, "PacketContainerMaxSize")) {
+		if (changeType == INT && caerStrEquals(changeKey, "PacketContainerMaxPacketSize")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,
-			CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_SIZE, U32T(changeValue.iint));
+			CAER_HOST_CONFIG_PACKETS_MAX_CONTAINER_PACKET_SIZE, U32T(changeValue.iint));
 		}
 		else if (changeType == INT && caerStrEquals(changeKey, "PacketContainerMaxInterval")) {
 			caerDeviceConfigSet(moduleData->moduleState, CAER_HOST_CONFIG_PACKETS,

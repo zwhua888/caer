@@ -1,7 +1,6 @@
 #ifndef OUTPUT_COMMON_H_
 #define OUTPUT_COMMON_H_
 
-#include "main.h"
 #include "base/module.h"
 #include "modules/misc/inout_common.h"
 
@@ -20,6 +19,6 @@ int caerOutputCommonGetServerFd(void *statePtr);
 bool caerOutputCommonInit(caerModuleData moduleData, outputCommonFDs fds, bool isNetworkStream, bool isNetworkMessageBased);
 void caerOutputCommonExit(caerModuleData moduleData);
 void caerOutputCommonRun(caerModuleData moduleData, size_t argsNumber, va_list args);
-void caerOutputCommonReset(caerModuleData moduleData);
+void caerOutputCommonReset(caerModuleData moduleData, uint16_t resetCallSourceID);
 
 #endif /* OUTPUT_COMMON_H_ */

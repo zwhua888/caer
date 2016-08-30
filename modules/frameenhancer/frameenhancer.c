@@ -46,7 +46,7 @@ static bool caerFrameEnhancerInit(caerModuleData moduleData) {
 
 #ifdef ENABLE_FRAMEENHANCER_OPENCV
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "demosaicType", "opencv_edge_aware");
-	sshsNodePutStringIfAbsent(moduleData->moduleNode, "contrastType", "opencv_clahe");
+	sshsNodePutStringIfAbsent(moduleData->moduleNode, "contrastType", "opencv_normalization");
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "whiteBalanceType", "opencv_grayworld");
 #else
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "demosaicType", "standard");
@@ -54,7 +54,8 @@ static bool caerFrameEnhancerInit(caerModuleData moduleData) {
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "whiteBalanceType", "standard");
 #endif
 
-	FrameEnhancerState state = moduleData->moduleState;
+	// Initialize configuration.
+	caerFrameEnhancerConfig(moduleData);
 
 	// Add config listeners last, to avoid having them dangling if Init doesn't succeed.
 	sshsNodeAddAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
@@ -95,6 +96,10 @@ static void caerFrameEnhancerRun(caerModuleData moduleData, size_t argsNumber, v
 #else
 		*enhancedFrame = caerFrameUtilsDemosaic(frame);
 #endif
+
+		// This creates a new, independent frame, which also needs to be
+		// correctly reclaimed at the end of the mainloop run.
+		caerMainloopFreeAfterLoop(&free, *enhancedFrame);
 	}
 
 	if (state->doWhiteBalance) {
@@ -147,12 +152,62 @@ static void caerFrameEnhancerConfig(caerModuleData moduleData) {
 
 	FrameEnhancerState state = moduleData->moduleState;
 
+	state->doDemosaic = sshsNodeGetBool(moduleData->moduleNode, "doDemosaic");
+
+	char *demosaicType = sshsNodeGetString(moduleData->moduleNode, "demosaicType");
+
+	if (caerStrEquals(demosaicType, "opencv_normal")) {
+		state->demosaicType = 1;
+	}
+	else if (caerStrEquals(demosaicType, "opencv_edge_aware")) {
+		state->demosaicType = 2;
+	}
+	else {
+		// Standard, non-OpenCV method.
+		state->demosaicType = 0;
+	}
+
+	free(demosaicType);
+
+	state->doContrast = sshsNodeGetBool(moduleData->moduleNode, "doContrast");
+
+	char *contrastType = sshsNodeGetString(moduleData->moduleNode, "contrastType");
+
+	if (caerStrEquals(contrastType, "opencv_normalization")) {
+		state->contrastType = 1;
+	}
+	else if (caerStrEquals(contrastType, "opencv_histogram_equalization")) {
+		state->contrastType = 2;
+	}
+	else if (caerStrEquals(contrastType, "opencv_clahe")) {
+		state->contrastType = 3;
+	}
+	else {
+		// Standard, non-OpenCV method.
+		state->contrastType = 0;
+	}
+
+	free(contrastType);
+
+	state->doWhiteBalance = sshsNodeGetBool(moduleData->moduleNode, "doWhiteBalance");
+
+	char *whiteBalanceType = sshsNodeGetString(moduleData->moduleNode, "whiteBalanceType");
+
+	if (caerStrEquals(whiteBalanceType, "opencv_simple")) {
+		state->whiteBalanceType = 1;
+	}
+	else if (caerStrEquals(whiteBalanceType, "opencv_grayworld")) {
+		state->whiteBalanceType = 2;
+	}
+	else {
+		// Standard, non-OpenCV method.
+		state->whiteBalanceType = 0;
+	}
+
+	free(whiteBalanceType);
 }
 
 static void caerFrameEnhancerExit(caerModuleData moduleData) {
 	// Remove listener, which can reference invalid memory in userData.
 	sshsNodeRemoveAttributeListener(moduleData->moduleNode, moduleData, &caerModuleConfigDefaultListener);
-
-	FrameEnhancerState state = moduleData->moduleState;
-
 }

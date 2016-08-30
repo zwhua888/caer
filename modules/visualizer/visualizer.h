@@ -3,24 +3,30 @@
 
 #include "main.h"
 #include "base/module.h"
-#include <libcaer/events/polarity.h>
-#include <libcaer/events/frame.h>
-#include <libcaer/events/imu6.h>
-#include <libcaer/events/point2d.h>
 #include <libcaer/events/packetContainer.h>
 #include <allegro5/allegro.h>
+#include <allegro5/allegro_font.h>
 
 #define VISUALIZER_DEFAULT_ZOOM 2.0f
 #define VISUALIZER_REFRESH_RATE 60.0f
 
+struct caer_visualizer_public_state {
+	sshsNode eventSourceConfigNode;
+	int32_t bitmapRendererSizeX;
+	int32_t bitmapRendererSizeY;
+	ALLEGRO_FONT *displayFont;
+};
+
+typedef struct caer_visualizer_public_state *caerVisualizerPublicState;
 typedef struct caer_visualizer_state *caerVisualizerState;
-typedef bool (*caerVisualizerRenderer)(caerVisualizerState state, caerEventPacketContainer container);
-typedef void (*caerVisualizerEventHandler)(caerVisualizerState state, ALLEGRO_EVENT event);
+
+typedef bool (*caerVisualizerRenderer)(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
+typedef void (*caerVisualizerEventHandler)(caerVisualizerPublicState state, ALLEGRO_EVENT event);
 
 // For reuse inside other modules.
 caerVisualizerState caerVisualizerInit(caerVisualizerRenderer renderer, caerVisualizerEventHandler eventHandler,
 	int32_t bitmapSizeX, int32_t bitmapSizeY, float defaultZoomFactor, bool defaultShowStatistics,
-	caerModuleData parentModule);
+	caerModuleData parentModule, int16_t eventSourceID);
 void caerVisualizerUpdate(caerVisualizerState state, caerEventPacketContainer container);
 void caerVisualizerExit(caerVisualizerState state);
 void caerVisualizerReset(caerVisualizerState state);
@@ -28,15 +34,16 @@ void caerVisualizerReset(caerVisualizerState state);
 void caerVisualizer(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketHeader packetHeader);
 
-bool caerVisualizerRendererPolarityEvents(caerVisualizerState state, caerEventPacketContainer container);
-bool caerVisualizerRendererFrameEvents(caerVisualizerState state, caerEventPacketContainer container);
-bool caerVisualizerRendererIMU6Events(caerVisualizerState state, caerEventPacketContainer container);
-bool caerVisualizerRendererPoint2DEvents(caerVisualizerState state, caerEventPacketContainer container);
+bool caerVisualizerRendererPolarityEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
+bool caerVisualizerRendererFrameEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
+bool caerVisualizerRendererIMU6Events(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
+bool caerVisualizerRendererPoint2DEvents(caerVisualizerPublicState state, caerEventPacketContainer container, bool doClear);
 
 void caerVisualizerMulti(uint16_t moduleID, const char *name, caerVisualizerRenderer renderer,
 	caerVisualizerEventHandler eventHandler, caerEventPacketContainer container);
 
-bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerState state, caerEventPacketContainer container);
+bool caerVisualizerMultiRendererPolarityAndFrameEvents(caerVisualizerPublicState state, caerEventPacketContainer container,
+	bool doClear);
 
 void caerVisualizerSystemInit(void);
 

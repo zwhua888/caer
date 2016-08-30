@@ -291,14 +291,23 @@ static inline caerModuleData findSourceModule(uint16_t sourceID) {
 	return (moduleData);
 }
 
-sshsNode caerMainloopGetSourceInfo(uint16_t sourceID) {
+sshsNode caerMainloopGetSourceNode(uint16_t sourceID) {
 	caerModuleData moduleData = findSourceModule(sourceID);
 	if (moduleData == NULL) {
 		return (NULL);
 	}
 
+	return (moduleData->moduleNode);
+}
+
+sshsNode caerMainloopGetSourceInfo(uint16_t sourceID) {
+	sshsNode sourceNode = caerMainloopGetSourceNode(sourceID);
+	if (sourceNode == NULL) {
+		return (NULL);
+	}
+
 	// All sources have a sub-node in SSHS called 'sourceInfo/'.
-	return (sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/"));
+	return (sshsGetRelativeNode(sourceNode, "sourceInfo/"));
 }
 
 void *caerMainloopGetSourceState(uint16_t sourceID) {
@@ -310,30 +319,30 @@ void *caerMainloopGetSourceState(uint16_t sourceID) {
 	return (moduleData->moduleState);
 }
 
-void caerMainloopResetInputs(void) {
+void caerMainloopResetInputs(uint16_t sourceID) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData *moduleData = NULL;
 
 	while ((moduleData = (caerModuleData *) utarray_next(mainloopData->inputModules, moduleData)) != NULL) {
-		atomic_store(&(*moduleData)->doReset, 1);
+		atomic_store(&(*moduleData)->doReset, sourceID);
 	}
 }
 
-void caerMainloopResetOutputs(void) {
+void caerMainloopResetOutputs(uint16_t sourceID) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData *moduleData = NULL;
 
 	while ((moduleData = (caerModuleData *) utarray_next(mainloopData->outputModules, moduleData)) != NULL) {
-		atomic_store(&(*moduleData)->doReset, 1);
+		atomic_store(&(*moduleData)->doReset, sourceID);
 	}
 }
 
-void caerMainloopResetProcessors(void) {
+void caerMainloopResetProcessors(uint16_t sourceID) {
 	caerMainloopData mainloopData = glMainloopData;
 	caerModuleData *moduleData = NULL;
 
 	while ((moduleData = (caerModuleData *) utarray_next(mainloopData->processorModules, moduleData)) != NULL) {
-		atomic_store(&(*moduleData)->doReset, 1);
+		atomic_store(&(*moduleData)->doReset, sourceID);
 	}
 }
 
