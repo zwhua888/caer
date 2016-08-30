@@ -33,6 +33,9 @@
 #ifdef ENABLE_CAMERACALIBRATION
 	#include "modules/cameracalibration/cameracalibration.h"
 #endif
+#ifdef ENABLE_MULTICAMERACALIBRATION
+	#include "modules/multicameracalibration/cameracalibration.h"
+#endif
 #ifdef ENABLE_FRAMEENHANCER
 	#include "modules/frameenhancer/frameenhancer.h"
 #endif
@@ -274,7 +277,7 @@ static bool mainloop_1(void) {
 	// add allegro sound on detection
 #ifdef ENABLE_CAFFEINTERFACE
 	if(classification_results != NULL) {
-		caerImagestreamerBeeper(22, classification_results, (int) MAX_IMG_QTY);
+		caerImagestreamerBeeper(222, classification_results, (int) MAX_IMG_QTY);
 	}
 #endif
 #endif
@@ -375,8 +378,8 @@ static bool mainloop_twocameras(void) {
 	// like with the Background Activity Filter, which suppresses events that
 	// look to be uncorrelated with real scene changes (noise reduction).
 #ifdef ENABLE_BAFILTER
-	caerBackgroundActivityFilter(2, polarity_cam0);
-	caerBackgroundActivityFilter(22, polarity_cam1);
+	caerBackgroundActivityFilter(3, polarity_cam0);
+	caerBackgroundActivityFilter(33, polarity_cam1);
 #endif
 
 	// Enable APS frame image enhancements.
