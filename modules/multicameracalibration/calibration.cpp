@@ -76,7 +76,6 @@ bool MultiCalibration::stereoCalibrate(MultiCalibrationSettings settings) {
 	vector<vector<Point3f> > objectPoints;
 	objectPoints.resize(imagePoints_cam0.size());
 
-
 	for (int i = 0; i < imagePoints_cam0.size(); i++) {
 		for (int j = 0; j < this->settings->boardHeigth; j++)
 			for (int k = 0; k < this->settings->boardWidth; k++)
@@ -131,7 +130,8 @@ bool MultiCalibration::stereoCalibrate(MultiCalibrationSettings settings) {
 		}
 		npoints += npt;
 	}
-	cout << "average epipolar err = " << err / npoints << endl;
+	float avreperr = err / npoints;
+	cout << "average epipolar err = " << avreperr << endl;
 
 	// save new intrinsic parameters
 	FileStorage fs(this->settings->saveFileName_intrinsics, FileStorage::WRITE);
@@ -163,23 +163,10 @@ bool MultiCalibration::stereoCalibrate(MultiCalibrationSettings settings) {
 	// calibration has been completed
 	this->settings->doCalibration = false;
 
-	/*Mat R1, R2, P1, P2, Q;
-	 Rect validRoi[2];
-
-	 stereoRectify(undistortCameraMatrix_cam0, undistortDistCoeffs_cam0,
-	 undistortCameraMatrix_cam1, undistortDistCoeffs_cam1,
-	 imageSize, R, T, R1, R2, P1, P2, Q,
-	 CALIB_ZERO_DISPARITY, 1, imageSize, &validRoi[0], &validRoi[1]);
-
-	 fs.open("extrinsics.yml", FileStorage::WRITE);
-	 if( fs.isOpened() )
-	 {
-	 fs << "R" << R << "T" << T << "R1" << R1 << "R2" << R2 << "P1" << P1 << "P2" << P2 << "Q" << Q;
-	 fs.release();
-	 }
-	 else*/
-
-	return (true);
+	if( (rms <= this->settings->acceptableAvrEpipolarErr) && (avreperr <= this->settings->acceptableRMSErr) )
+		return (true);
+	else
+		return (false);
 }
 
 void MultiCalibration::addStereoCalib(vector<Point2f>*vec1,

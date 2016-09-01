@@ -15,17 +15,15 @@ struct MultiCalibrationSettings_struct {
 	uint32_t numPairsImagesBeforCalib;
 	uint32_t boardWidth;
 	uint32_t boardHeigth;
-	int patternWidth;
-	int patternHeight;
-	int showFeatureExtraction;
 	int verbose;
-	int nMiniMatches;
-	int cameraType;
 	enum CameraCalibrationPattern calibrationPattern;
 	float aspectRatio;
 	bool assumeZeroTangentialDistortion;
 	bool fixPrincipalPointAtCenter;
 	float boardSquareSize;
+	bool doDisparity;
+	float acceptableAvrEpipolarErr;
+	float acceptableRMSErr;
 
 };
 

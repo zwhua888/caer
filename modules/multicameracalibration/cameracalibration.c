@@ -10,6 +10,7 @@ struct MultiCalibrationState_struct {
 	uint64_t lastFrameTimestamp_cam0;
 	uint64_t lastFrameTimestamp_cam1;
 	uint32_t points_found;
+	uint32_t last_points_found;
 	size_t lastFoundPoints;
 	bool calibrationLoaded;
 };
@@ -58,18 +59,16 @@ static bool caerMultiCalibrationInit(caerModuleData moduleData) {
 			"camera_calib_1.xml"); // The name of the file from which to load the calibration
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "useFisheyeModel_cam1",
 			false); // Use Fisheye camera model for calibration
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "patternWidth", 8);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "patternHeight", 6);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "showFeatureExtraction", 0);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "verbose", 0);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "nMiniMatches", 0);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "cameraType", 0);
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardWidth", 9); // The size of the board (width)
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "boardHeigth", 5); // The size of the board (height)
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "captureDelay", 50000);
-	sshsNodePutIntIfAbsent(moduleData->moduleNode, "numPairsImagesBeforCalib",
-			10);
+	sshsNodePutIntIfAbsent(moduleData->moduleNode, "numPairsImagesBeforCalib",20);
 	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "boardSquareSize", 1.0f); // The size of a square in your defined unit (point, millimeter, etc.)
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "acceptableAvrEpipolarErr", 200.0f);
+	sshsNodePutFloatIfAbsent(moduleData->moduleNode, "acceptableRMSErr", 200.0f);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doDisparity", false); // Do calibration using live images
+
 
 	// Update all settings.
 	updateSettings(moduleData);
@@ -86,6 +85,7 @@ static bool caerMultiCalibrationInit(caerModuleData moduleData) {
 	//not loaded at the init
 	state->calibrationLoaded = false;
 	state->points_found = 0;
+	state->last_points_found = 0;
 
 	return (true);
 }
@@ -107,17 +107,7 @@ static void updateSettings(caerModuleData moduleData) {
 			moduleData->moduleNode, "loadFileName_cam1");
 	state->settings.useFisheyeModel_cam1 = sshsNodeGetBool(
 			moduleData->moduleNode, "useFisheyeModel_cam1");
-	state->settings.patternWidth = sshsNodeGetInt(moduleData->moduleNode,
-			"patternWidth");
-	state->settings.patternHeight = sshsNodeGetInt(moduleData->moduleNode,
-			"patternHeight");
-	state->settings.showFeatureExtraction = sshsNodeGetInt(
-			moduleData->moduleNode, "showFeatureExtraction");
 	state->settings.verbose = sshsNodeGetInt(moduleData->moduleNode, "verbose");
-	state->settings.nMiniMatches = sshsNodeGetInt(moduleData->moduleNode,
-			"nMiniMatches");
-	state->settings.cameraType = sshsNodeGetInt(moduleData->moduleNode,
-			"cameraType");
 	state->settings.boardWidth = U32T(
 			sshsNodeGetInt(moduleData->moduleNode, "boardWidth"));
 	state->settings.boardHeigth = U32T(
@@ -128,6 +118,12 @@ static void updateSettings(caerModuleData moduleData) {
 			moduleData->moduleNode, "numPairsImagesBeforCalib");
 	state->settings.boardSquareSize = sshsNodeGetFloat(moduleData->moduleNode,
 			"boardSquareSize");
+	state->settings.doDisparity = sshsNodeGetBool(moduleData->moduleNode,
+				"doDisparity");
+	state->settings.acceptableAvrEpipolarErr = sshsNodeGetFloat(moduleData->moduleNode,
+			"acceptableAvrEpipolarErr");
+	state->settings.acceptableRMSErr = sshsNodeGetFloat(moduleData->moduleNode,
+				"acceptableRMSErr");
 
 }
 
@@ -164,15 +160,15 @@ static void caerMultiCalibrationRun(caerModuleData moduleData,
 
 	MultiCalibrationState state = moduleData->moduleState;
 
-	// At this point we always try to load the calibration settings for undistortion.
+	// At this point we always try to load the calibration settings for undistorsion.
 	// Maybe they just got created or exist from a previous run.
 	if (!state->calibrationLoaded) {
 		state->calibrationLoaded = multicalibration_loadCalibrationFile(
 				state->cpp_class, &state->settings);
 	}
 
-	// Multi Camera estimation is done only using frames.
-	// Here we should make sure that the two frames are not too far in time one from each other.
+
+	// Multi Camera calibration is done only using frames.
 	if (state->settings.doCalibration && frame_0 != NULL && frame_1 != NULL) {
 
 		bool frame_0_pattern = false;
@@ -227,12 +223,10 @@ static void caerMultiCalibrationRun(caerModuleData moduleData,
 			if (!(abs(frame_1_ts - frame_0_ts) < state->settings.captureDelay)) {
 				caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
 						"Both camera have seen the calibration pattern... adding valid points");
-
 				//increment number of points
-				state->points_found = state->points_found + 1;
+				state->points_found += 1;
 				multicalibration_addStereoCalibVec(state->cpp_class,
 						foundPoint_cam0, foundPoint_cam1);
-
 				caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
 						"Pairs have been successfully detected");
 			}
@@ -241,13 +235,16 @@ static void caerMultiCalibrationRun(caerModuleData moduleData,
 
 		multicalibration_freeStereoVec(foundPoint_cam0, foundPoint_cam1);
 
-		if (state->points_found >= state->settings.numPairsImagesBeforCalib) {
+		if ((state->points_found >= state->settings.numPairsImagesBeforCalib) && (state->last_points_found < state->points_found) ) {
 			caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
 					"Running stereo calibration ...");
-
-			bool calib_done = multicalibration_stereoCalibrate(state->cpp_class,
-					&state->settings);
-
+			bool calib_done = multicalibration_stereoCalibrate(state->cpp_class, &state->settings);
+			state->last_points_found = state->points_found; // make sure we do not re-calibrate if we did not add new points
+			if(calib_done)
+				sshsNodePutBool(moduleData->moduleNode, "doCalibration", false); // calibration done
+			else
+				caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
+								"Keep acquiring images, error not acceptable ...");
 		}
 
 	}
