@@ -5,11 +5,14 @@ enum CameraCalibrationPattern { CAMCALIB_CHESSBOARD, CAMCALIB_CIRCLES_GRID, CAMC
 
 struct MultiCalibrationSettings_struct {
 	bool doCalibration;
-	bool doSavetxt;
-	char *saveFileName;
+	char *loadFileName_cam0;
+	bool useFisheyeModel_cam0;
+	bool useFisheyeModel_cam1;
+	char *loadFileName_cam1;
+	char *saveFileName_extrinsics;
+	char *saveFileName_intrinsics;
 	uint32_t captureDelay;
-	char *loadFileNames;
-	int nCamera;
+	uint32_t numPairsImagesBeforCalib;
 	uint32_t boardWidth;
 	uint32_t boardHeigth;
 	int patternWidth;
@@ -18,11 +21,11 @@ struct MultiCalibrationSettings_struct {
 	int verbose;
 	int nMiniMatches;
 	int cameraType;
-	bool useFisheyeModel;
 	enum CameraCalibrationPattern calibrationPattern;
 	float aspectRatio;
 	bool assumeZeroTangentialDistortion;
 	bool fixPrincipalPointAtCenter;
+	float boardSquareSize;
 
 };
 

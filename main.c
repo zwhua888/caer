@@ -320,6 +320,10 @@ static bool mainloop_twocameras(void) {
 	// An eventPacketContainer bundles event packets of different types together,
 	// to maintain time-coherence between the different events.
 
+#ifdef ENABLE_VISUALIZER
+	caerVisualizerEventHandler visualizerEventHandler = NULL;
+#endif
+
 	caerEventPacketContainer container_cam0 = NULL;
 	caerSpecialEventPacket special_cam0 = NULL;
 	caerPolarityEventPacket polarity_cam0 = NULL;
@@ -364,7 +368,7 @@ static bool mainloop_twocameras(void) {
 	frame_cam0 = (caerFrameEventPacket) caerEventPacketContainerFindEventPacketByType(container_cam0, FRAME_EVENT);
 	imu_cam0 = (caerIMU6EventPacket) caerEventPacketContainerFindEventPacketByType(container_cam0, IMU6_EVENT);
 
-	container_cam1 = caerInputFile(10);
+	container_cam1 = caerInputFile(100);
 
 	// Typed EventPackets contain events of a certain type.
 	// We search for them by type here, because input modules may not have all or any of them.
@@ -402,8 +406,12 @@ static bool mainloop_twocameras(void) {
 
 	// A simple visualizer exists to show what the output looks like.
 #ifdef ENABLE_VISUALIZER
-	caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, NULL, container_cam0);
-	caerVisualizerMulti(6688, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, NULL, container_cam1);
+	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, NULL, container_cam0);
+	//caerVisualizerMulti(6688, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, NULL, container_cam1);
+	caerVisualizer(68, "Frame", &caerVisualizerRendererFrameEvents, visualizerEventHandler, (caerEventPacketHeader) frame_cam0);
+	caerVisualizer(6688, "Frame", &caerVisualizerRendererFrameEvents, visualizerEventHandler, (caerEventPacketHeader) frame_cam1);
+	caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, visualizerEventHandler, (caerEventPacketHeader) polarity_cam0);
+	caerVisualizer(6600, "Polarity", &caerVisualizerRendererPolarityEvents, visualizerEventHandler, (caerEventPacketHeader) polarity_cam1);
 #if defined(ENABLE_VISUALIZER) && defined(ENABLE_IMAGEGENERATOR)
 	caerVisualizer(64, "ImageStreamerFrameCam0", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frame_cam0);
 	caerVisualizer(6644, "ImageStreamerFrameCam0", &caerVisualizerRendererFrameEvents, NULL, (caerEventPacketHeader) frame_cam1);
