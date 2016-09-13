@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<opencv_storage>
+<calibration_time>"Wed Aug 10 13:53:31 2016"</calibration_time>
+<nr_of_frames>20</nr_of_frames>
+<image_width>346</image_width>
+<image_height>260</image_height>
+<board_width>9</board_width>
+<board_height>5</board_height>
+<square_size>27.</square_size>
+<!-- flags: +fix_k4 +fix_k5 -->
+<flags>6144</flags>
+<use_fisheye_model>0</use_fisheye_model>
+<camera_matrix type_id="opencv-matrix">
+  <rows>3</rows>
+  <cols>3</cols>
+  <dt>d</dt>
+  <data>
+    2.4916333762182884e+02 0. 1.5974570347516547e+02 0.
+    2.5005475834104365e+02 1.6185466652403326e+02 0. 0. 1.</data></camera_matrix>
+<distortion_coefficients type_id="opencv-matrix">
+  <rows>5</rows>
+  <cols>1</cols>
+  <dt>d</dt>
+  <data>
+    -3.1432123564559483e-01 1.5963389893759133e-01
+    5.2061110177815712e-04 -6.8161913705807719e-04
+    -5.1545237348958536e-02</data></distortion_coefficients>
+<avg_reprojection_error>2.5066143858125683e-01</avg_reprojection_error>
+<per_view_reprojection_errors type_id="opencv-matrix">
+  <rows>20</rows>
+  <cols>1</cols>
+  <dt>f</dt>
+  <data>
+    3.20650965e-01 2.69776940e-01 2.39322573e-01 2.61992037e-01
+    3.44335616e-01 2.04083845e-01 2.56264687e-01 2.32659325e-01
+    3.86503845e-01 4.17502165e-01 1.42134368e-01 1.51407242e-01
+    2.07749292e-01 2.29931906e-01 1.47554919e-01 2.64058352e-01
+    1.35176077e-01 1.65915743e-01 1.98981598e-01 1.88017458e-01</data></per_view_reprojection_errors>
+</opencv_storage>

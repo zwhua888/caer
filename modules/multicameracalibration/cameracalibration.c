@@ -167,7 +167,6 @@ static void caerMultiCalibrationRun(caerModuleData moduleData,
 				state->cpp_class, &state->settings);
 	}
 
-
 	// Multi Camera calibration is done only using frames.
 	if (state->settings.doCalibration && frame_0 != NULL && frame_1 != NULL) {
 
