@@ -21,6 +21,7 @@ void multicalibration_addStereoCalibVec(MultiCalibration *calibClass,
 		void * vec1, void * vec2);
 bool multicalibration_loadCalibrationFile(MultiCalibration *calibClass,
 		MultiCalibrationSettings settings);
+void multicalibration_clearImagePoints(MultiCalibration *calibClass);
 
 #ifdef __cplusplus
 }

@@ -241,10 +241,17 @@ static void caerMultiCalibrationRun(caerModuleData moduleData,
 			state->last_points_found = state->points_found; // make sure we do not re-calibrate if we did not add new points
 			if(calib_done)
 				sshsNodePutBool(moduleData->moduleNode, "doCalibration", false); // calibration done
-			else
+			else{
 				caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
 								"Keep acquiring images, error not acceptable ...");
+				multicalibration_clearImagePoints(state->cpp_class);
+				caerLog(CAER_LOG_WARNING, moduleData->moduleSubSystemString,
+								"Cleared saved points, starting from zero.");
+			}
 		}
+
+		//only do calibration if new pictures have been acquired
+		state->last_points_found = state->points_found;
 
 	}
 

@@ -169,6 +169,13 @@ bool MultiCalibration::stereoCalibrate(MultiCalibrationSettings settings) {
 		return (false);
 }
 
+void MultiCalibration::clearImagePoints(){
+
+	imagePoints_cam0.clear();
+	imagePoints_cam1.clear();
+
+}
+
 void MultiCalibration::addStereoCalib(vector<Point2f>*vec1,
 		vector<Point2f>*vec2) {
 

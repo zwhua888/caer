@@ -38,6 +38,17 @@ void multicalibration_freeStereoVec(void * vec1, void * vec2) {
 	return;
 }
 
+void multicalibration_clearImagePoints(MultiCalibration *calibClass){
+
+	try {
+			calibClass->clearImagePoints();
+		} catch (const std::exception& ex) {
+			caerLog(CAER_LOG_ERROR, "multicalibration_clearImagePoints()",
+					"Failed with C++ exception: %s", ex.what());
+		}
+
+}
+
 void multicalibration_addStereoCalibVec(MultiCalibration *calibClass,
 		void * vec1, void * vec2) {
 
