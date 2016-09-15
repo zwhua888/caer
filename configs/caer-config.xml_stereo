@@ -347,7 +347,7 @@
                         <attr key="DropIMUOnTransferStall" type="bool">false</attr>
                         <attr key="ForceChipBiasEnable" type="bool">false</attr>
                         <attr key="Run" type="bool">true</attr>
-                        <attr key="TimestampReset" type="bool">false</attr>
+                        <attr key="TimestampReset" type="bool">true</attr>
                         <attr key="TimestampRun" type="bool">true</attr>
                     </node>
                     <node name="usb" path="/1/1-DAVISFX3/DAVIS346B/usb/">
@@ -1169,7 +1169,7 @@
                 <attr key="runAtStartup" type="bool">true</attr>
                 <attr key="showStatistics" type="bool">false</attr>
                 <attr key="subsampleRendering" type="int">1</attr>
-                <attr key="zoomFactor" type="float">2</attr>
+                <attr key="zoomFactor" type="float">1.5</attr>
             </node>
             <node name="61-VisualizerFrame" path="/1/61-VisualizerFrame/">
                 <attr key="runAtStartup" type="bool">true</attr>
@@ -1196,7 +1196,7 @@
                 <attr key="runAtStartup" type="bool">true</attr>
                 <attr key="showStatistics" type="bool">false</attr>
                 <attr key="subsampleRendering" type="int">1</attr>
-                <attr key="zoomFactor" type="float">2</attr>
+                <attr key="zoomFactor" type="float">1.5</attr>
             </node>
             <node name="6644-VisualizerImageStreamerFrameCam0" path="/1/6644-VisualizerImageStreamerFrameCam0/">
                 <attr key="runAtStartup" type="bool">true</attr>
@@ -1208,7 +1208,7 @@
                 <attr key="runAtStartup" type="bool">true</attr>
                 <attr key="showStatistics" type="bool">false</attr>
                 <attr key="subsampleRendering" type="int">1</attr>
-                <attr key="zoomFactor" type="float">2</attr>
+                <attr key="zoomFactor" type="float">1.5</attr>
             </node>
             <node name="6688-VisualizerPolarityAndFrame" path="/1/6688-VisualizerPolarityAndFrame/">
                 <attr key="runAtStartup" type="bool">true</attr>
@@ -1220,7 +1220,7 @@
                 <attr key="runAtStartup" type="bool">true</attr>
                 <attr key="showStatistics" type="bool">false</attr>
                 <attr key="subsampleRendering" type="int">1</attr>
-                <attr key="zoomFactor" type="float">2</attr>
+                <attr key="zoomFactor" type="float">1.5</attr>
             </node>
             <node name="68-VisualizerPolarityAndFrame" path="/1/68-VisualizerPolarityAndFrame/">
                 <attr key="runAtStartup" type="bool">true</attr>
@@ -1229,8 +1229,8 @@
                 <attr key="zoomFactor" type="float">3.5</attr>
             </node>
             <node name="7-MultiCameraCalibration" path="/1/7-MultiCameraCalibration/">
-                <attr key="acceptableAvrEpipolarErr" type="float">50</attr>
-                <attr key="acceptableRMSErr" type="float">50</attr>
+                <attr key="acceptableAvrEpipolarErr" type="float">80</attr>
+                <attr key="acceptableRMSErr" type="float">55</attr>
                 <attr key="boardHeigth" type="int">5</attr>
                 <attr key="boardSquareSize" type="float">74</attr>
                 <attr key="boardWidth" type="int">8</attr>
