@@ -47,6 +47,7 @@ static bool caerMultiCalibrationInit(caerModuleData moduleData) {
 
 	// Create config settings.
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doCalibration", false); // Do calibration using live images
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "isCalibrated", false); // Do calibration using live images
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "saveFileName_intrinsics",
 			"intrinsics.xml");
 	sshsNodePutStringIfAbsent(moduleData->moduleNode, "loadFileName_cam0",
@@ -124,6 +125,8 @@ static void updateSettings(caerModuleData moduleData) {
 			"acceptableAvrEpipolarErr");
 	state->settings.acceptableRMSErr = sshsNodeGetFloat(moduleData->moduleNode,
 				"acceptableRMSErr");
+	state->settings.doCalibration = sshsNodeGetBool(moduleData->moduleNode,
+			"isCalibrated");
 
 }
 

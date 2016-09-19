@@ -5,6 +5,7 @@ enum CameraCalibrationPattern { CAMCALIB_CHESSBOARD, CAMCALIB_CIRCLES_GRID, CAMC
 
 struct MultiCalibrationSettings_struct {
 	bool doCalibration;
+	bool isCalibrated;
 	char *loadFileName_cam0;
 	bool useFisheyeModel_cam0;
 	bool useFisheyeModel_cam1;

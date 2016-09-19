@@ -40,7 +40,10 @@ public:
 			MultiCalibrationSettings settings);bool stereoCalibrate(
 			MultiCalibrationSettings settings);
 	void addStereoCalib(vector<Point2f> *vec1, vector<Point2f> *vec2);
+	//bool loadStereoCalibration();
+	//bool loadCalibrationFile(MultiCalibrationSettings settings);
 	void clearImagePoints();
+	void stereoRectifyHartley();
 	void updateSettings(MultiCalibrationSettings settings);
 	Point3f getCamerasLocation(Mat Rvec, Mat Tvec);
 

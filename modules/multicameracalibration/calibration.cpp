@@ -169,6 +169,11 @@ bool MultiCalibration::stereoCalibrate(MultiCalibrationSettings settings) {
 		return (false);
 }
 
+void MultiCalibration::stereoRectifyHartley(){
+
+
+}
+
 void MultiCalibration::clearImagePoints(){
 
 	imagePoints_cam0.clear();
@@ -276,6 +281,10 @@ size_t MultiCalibration::foundPoints(int camid) {
 	if (camid == 1)
 		return (imagePoints_cam1.size());
 }
+
+/*bool MultiCalibration::loadStereoCalibration(MultiCalibrationSettings settings) {
+
+}*/
 
 bool MultiCalibration::loadCalibrationFile(MultiCalibrationSettings settings) {
 
