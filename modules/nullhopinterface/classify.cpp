@@ -2,7 +2,6 @@
  *  Author: federico.corradi@inilabs.com
  */
 #include "classify.hpp"
-#include "settings.h"
 
 void zs_driverMonitor::file_set(char * i, double *b, double thr) {
 	zs_driverMonitor::file_i = i;
