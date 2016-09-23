@@ -1,4 +1,4 @@
-/* Caffe Interface for deep learning
+/* NullHop Interface for CNN acceleration
  *  Author: federico.corradi@inilabs.com
  */
 #include "classify.hpp"
