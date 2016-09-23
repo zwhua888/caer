@@ -99,7 +99,7 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
 	imagegeneratorState state = moduleData->moduleState;
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "numSpikes", 7000);
 	state->numSpikes = sshsNodeGetInt(moduleData->moduleNode, "numSpikes");
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSavePng_hist", false);
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSavePng_hist", true);
 	state->doSavePng_hist = sshsNodeGetBool(moduleData->moduleNode, "doSavePng_hist");
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSaveTxt_hist", false);
 	state->doSaveTxt_hist = sshsNodeGetBool(moduleData->moduleNode, "doSaveTxt_hist");
@@ -186,7 +186,7 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
 	if(remove(filename_sym) != 0){
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove symlink %s.", strerror(errno));
 	}
-	
+
 	//create symlink
 	if(symlink(filename, filename_sym) != 0){
 		caerLog(CAER_LOG_ERROR, __func__, "Failed to create symlink errno %s.", strerror(errno));

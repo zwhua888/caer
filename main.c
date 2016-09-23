@@ -268,6 +268,22 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
+#ifdef ENABLE_NULLHOPINTERFACE
+	// this also requires image generator
+#ifdef ENABLE_IMAGEGENERATOR
+	// this wrapper let you interact with NullHop
+	// for example, we now classify the latest image
+	// only run CNN if we have a file to classify
+
+	// create image describing network activity
+	caerFrameEventPacket networkActivity = NULL;
+
+	if(*file_strings_classify != NULL) {
+		caerNullHopWrapper(23, file_strings_classify, classification_results, (int) MAX_IMG_QTY, NULL);
+	}
+#endif
+#endif
+
 #ifdef ENABLE_CAFFEINTERFACE
 	// this also requires image generator
 #ifdef ENABLE_IMAGEGENERATOR
@@ -336,6 +352,7 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_CAFFEINTERFACE
 	free(networkActivity); // frame that plots network outputs
 #endif
+
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.
@@ -353,7 +370,7 @@ int main(int argc, char **argv) {
 	caerLogInit();
 
 	// Daemonize the application (run in background).
-	// caerDaemonize();
+	//caerDaemonize();
 
 	// Initialize visualizer framework (load fonts etc.).
 #ifdef ENABLE_VISUALIZER
