@@ -241,7 +241,7 @@ inline void memdump_checking(char* virtual_address, int byte_count) {
 		if(data != 3 || data_low != data_low_bkp)
 		{
 			resetAXIDMA();
-			printf("Error en la secuencia. Se esperada: high --> 00000003, low --> %d. Recibido: high --> %d, low --> %d", data_low_bkp, data, data_low);
+			printf("Error in the sequence. is expected: high --> 00000003, low --> %d. Received: high --> %d, low --> %d", data_low_bkp, data, data_low);
 		}
 		else if(data_low == 0x3f)
 		{
