@@ -153,7 +153,7 @@ INCLUDE(FindPkgConfig)
 
 SET(CAER_INCDIRS /home/hyo/arm-devel/arm_zynq/include/mxml-2.9 /home/hyo/arm-devel/arm_zynq/include/ /usr/arm-linux-gnueabi/include/c++/4.9.3/ /usr/arm-linux-gnueabi/include/c++/4.9.3/arm-linux-gnueabi/)
 SET(CAER_LIBDIRS /home/hyo/arm-devel/arm_zynq/lib)
-SET(CAER_C_LIBS "-lcaer -lmxml")
+SET(CAER_C_LIBS "-lcaer -lmxml -pthread")
 SET(CAER_C_SRC_FILES "")
 
 # By default, no C++ support is enabled.
