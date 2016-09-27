@@ -5,6 +5,8 @@
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "wrapper.h"
+#include <sys/types.h>
+#include <sys/wait.h>
 
 struct nullhopwrapper_state {
 	uint32_t *integertest;
@@ -39,7 +41,7 @@ static bool caerNullHopWrapperInit(caerModuleData moduleData) {
 
 	//Initializing nullhop network..
 	state->cpp_class = newzs_driverMonitor();
-	//MyClass_init_network(state->cpp_class);
+	zs_driverMonitor_initNet(state->cpp_class);
 
 	return (true);
 }
@@ -63,7 +65,17 @@ static void caerNullHopWrapperRun(caerModuleData moduleData, size_t argsNumber, 
 
     for (int i = 0; i < max_img_qty; ++i){
         if (file_string[i] != NULL) {
+        	zs_driverMonitor_initNet(state->cpp_class);
+        	zs_driverMonitor_resetAxiBus(state->cpp_class);
         	zs_driverMonitor_file_set(state->cpp_class, file_string[i], &classificationResults[i], state->detThreshold);
+        	//pid_t pid = fork();
+        	//if(pid==0){/*child process*/
+        	//	static char *argv[]={"echo","NullHop testbench", NULL};
+        	//system("/home/root/zs_driver");
+        	//	exit(127);/*only if execv fails */
+        	//}else{
+        	//	waitpid(pid,0,0);
+        	//}
         }
     }
 

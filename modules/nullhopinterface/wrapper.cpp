@@ -18,6 +18,14 @@ char * zs_driverMonitor_file_get(zs_driverMonitor* v) {
 	return v->file_get();
 }
 
+void zs_driverMonitor_initNet(zs_driverMonitor* v){
+	return v->initNet();
+}
+
+void zs_driverMonitor_resetAxiBus(zs_driverMonitor* v){
+	return v->resetAxiBus();
+}
+
 void deleteMyClass(zs_driverMonitor* v) {
 	delete v;
 }

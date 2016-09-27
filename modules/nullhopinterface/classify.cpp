@@ -3,26 +3,197 @@
  */
 #include "classify.hpp"
 
+void zs_driverMonitor::initNet() {
+
+	resetAxiBus();
+
+}
+
 void zs_driverMonitor::file_set(char * i, double *b, double thr) {
 	zs_driverMonitor::file_i = i;
 
-	zs_driverMonitor * zsDM = NULL;
-	zsDM = new zs_driverMonitor();
-	zsDM->readNetwork("./network_face");
-
-	//pthread_t m_readThread;
-	//pthread_create(&m_readThread,NULL,readThreadRoutine,(void *)&zsDM);
-	zsDM->launchThread();
-	unsigned long long n_clkCycles = 0;
-
-	while(1)
-	{
-		++n_clkCycles;
-		zsDM->processingLoop(n_clkCycles);
-
-	}
+	resetAxiBus();
+	runLoop();
 
 	return;
+}
+
+unsigned int zs_driverMonitor::dma_set_(unsigned int* dma_virtual_address,
+		int offset, unsigned int value) {
+	dma_virtual_address[offset >> 2] = value;
+}
+
+unsigned int zs_driverMonitor::dma_get_(unsigned int* dma_virtual_address,
+		int offset) {
+	return dma_virtual_address[offset >> 2];
+}
+
+void zs_driverMonitor::resetAxiBus() {
+	dma_set_(virtual_address_, S2MM_CONTROL_REGISTER_, 4);
+	dma_set_(virtual_address_, MM2S_CONTROL_REGISTER_, 4);
+	dma_set_(virtual_address_, S2MM_CONTROL_REGISTER_, 0);
+	dma_set_(virtual_address_, MM2S_CONTROL_REGISTER_, 0);
+}
+
+bool zs_driverMonitor::waitValidAxiDataToRead_(int wordsNumber) {
+
+	//printf("waiting \n");
+	//dma_set(virtual_address, S2MM_CONTROL_REGISTER, 0); // Stop S2MM
+	dma_set_(virtual_address_, S2MM_STATUS_REGISTER_, 2); // Clear idle
+	dma_set_(virtual_address_, S2MM_STATUS_REGISTER_, 0x1000); // Clear IOC_Irq
+	dma_set_(virtual_address_, S2MM_DESTINATION_ADDRESS_, dest_addr_offset_);
+	dma_set_(virtual_address_, S2MM_CONTROL_REGISTER_, 0xf001);
+	dma_set_(virtual_address_, S2MM_LENGTH_, TRANSLEN_ * wordsNumber);
+
+	dma_s2mm_sync_(virtual_address_); // Wait until Idle or IOC_Irq bit is 1
+	//memdump_(virtual_destination_address_, TRANSLEN_*burst);
+}
+
+int zs_driverMonitor::dma_mm2s_sync_(unsigned int* dma_virtual_address) {
+	unsigned int mm2s_status = dma_get_(dma_virtual_address,
+			MM2S_STATUS_REGISTER_);
+	while (!(mm2s_status & 1 << 12) || !(mm2s_status & 1 << 1)) {
+		mm2s_status = dma_get_(dma_virtual_address, MM2S_STATUS_REGISTER_);
+	}
+}
+
+int zs_driverMonitor::dma_s2mm_sync_(unsigned int* dma_virtual_address) {
+	unsigned int s2mm_status = dma_get_(dma_virtual_address,
+			S2MM_STATUS_REGISTER_);
+
+	while (!(s2mm_status & (1 << 12)) || !(s2mm_status & (1 << 1))) {
+		s2mm_status = dma_get_(dma_virtual_address, S2MM_STATUS_REGISTER_);
+	}
+}
+
+int zs_driverMonitor::dma_s2mm_sync_halted_and_notIDLE_(
+		unsigned int* dma_virtual_address) {
+	unsigned int s2mm_status = dma_get_(dma_virtual_address,
+			S2MM_STATUS_REGISTER_);
+
+	while ((s2mm_status & (1 << 12)) || (s2mm_status & (1 << 1))) {
+		s2mm_status = dma_get_(dma_virtual_address, S2MM_STATUS_REGISTER_);
+	}
+}
+
+void zs_driverMonitor::dma_s2mm_status_(unsigned int* dma_virtual_address) {
+	unsigned int status = dma_get_(dma_virtual_address, S2MM_STATUS_REGISTER_);
+	printf("Stream to memory-mapped status (0x%08x@0x%02x):", status,
+			S2MM_STATUS_REGISTER_);
+	if (status & 0x00000001)
+		printf(" halted");
+	else
+		printf(" running");
+	if (status & 0x00000002)
+		printf(" idle");
+	if (status & 0x00000008)
+		printf(" SGIncld");
+	if (status & 0x00000010)
+		printf(" DMAIntErr");
+	if (status & 0x00000020)
+		printf(" DMASlvErr");
+	if (status & 0x00000040)
+		printf(" DMADecErr");
+	if (status & 0x00000100)
+		printf(" SGIntErr");
+	if (status & 0x00000200)
+		printf(" SGSlvErr");
+	if (status & 0x00000400)
+		printf(" SGDecErr");
+	if (status & 0x00001000)
+		printf(" IOC_Irq");
+	if (status & 0x00002000)
+		printf(" Dly_Irq");
+	if (status & 0x00004000)
+		printf(" Err_Irq");
+	printf("\n");
+}
+
+void zs_driverMonitor::dma_mm2s_status_(unsigned int* dma_virtual_address) {
+	unsigned int status = dma_get_(dma_virtual_address, MM2S_STATUS_REGISTER_);
+	printf("Memory-mapped to stream status (0x%08x@0x%02x):", status,
+			MM2S_STATUS_REGISTER_);
+	if (status & 0x00000001)
+		printf(" halted");
+	else
+		printf(" running");
+	if (status & 0x00000002)
+		printf(" idle");
+	if (status & 0x00000008)
+		printf(" SGIncld");
+	if (status & 0x00000010)
+		printf(" DMAIntErr");
+	if (status & 0x00000020)
+		printf(" DMASlvErr");
+	if (status & 0x00000040)
+		printf(" DMADecErr");
+	if (status & 0x00000100)
+		printf(" SGIntErr");
+	if (status & 0x00000200)
+		printf(" SGSlvErr");
+	if (status & 0x00000400)
+		printf(" SGDecErr");
+	if (status & 0x00001000)
+		printf(" IOC_Irq");
+	if (status & 0x00002000)
+		printf(" Dly_Irq");
+	if (status & 0x00004000)
+		printf(" Err_Irq");
+	printf("\n");
+}
+
+void zs_driverMonitor::memdump_(char* virtual_address, int byte_count) {
+	char *p = virtual_address;
+	int offset;
+	unsigned int data = 0;
+	unsigned int data_low = 0;
+
+	for (offset = 0; offset < byte_count; offset++) {
+		data |= (p[offset] & 0xFF) << ((offset % 4) * 8);
+		if (offset % 8 == 7) {
+			printf("0x%08x%08x\n", data, data_low);
+			data = 0;
+			data_low = 0;
+		} else {
+			if (offset % 4 == 3) {
+				data_low = data;
+				data = 0;
+			}
+		}
+	}
+}
+
+void zs_driverMonitor::memdump_checking_(char* virtual_address,
+		int byte_count) {
+	char *p = virtual_address;
+	int offset;
+	unsigned int data = 0;
+	unsigned int data_low = 0;
+	unsigned int data_low_bkp = 0;
+
+	for (offset = 0; offset < byte_count; offset++) {
+		data |= (p[offset] & 0xFF) << ((offset % 4) * 8);
+		if (offset % 8 == 7) {
+			printf("0x%08x%08x\n", data, data_low);
+			if (data != 3 || data_low != data_low_bkp) {
+				resetAxiBus();
+				printf(
+						"Error in the sequence. is expected: high --> 00000003, low --> %d. Received: high --> %d, low --> %d",
+						data_low_bkp, data, data_low);
+			} else if (data_low == 0x3f) {
+				data_low_bkp = 0;
+			} else {
+				data_low_bkp += 0x100;
+			}
+			data = 0;
+			data_low = 0;
+		} else {
+			if (offset % 4 == 3) {
+				data_low = data;
+				data = 0;
+			}
+		}
+	}
 }
 
 char * zs_driverMonitor::file_get() {
@@ -30,7 +201,22 @@ char * zs_driverMonitor::file_get() {
 }
 
 void zs_driverMonitor::launchThread() {
-	pthread_create(&m_readThread, NULL, readThreadRoutine, (void *) this);
+
+	// high priority
+	int rc;
+	pthread_attr_t attr;
+	struct sched_param param;
+
+	rc = pthread_attr_init(&attr);
+	rc = pthread_attr_getschedparam(&attr, &param);
+	(param.sched_priority)++;
+	rc = pthread_attr_setschedparam(&attr, &param);
+
+	if (pthread_create(&m_readThread, &attr, readThreadRoutine, (void *) this)
+			!= 0) {
+		printf("error creating read thread.. exiting");
+		exit(1);
+	}
 }
 
 void zs_driverMonitor::loadFCParams() {
@@ -39,10 +225,10 @@ void zs_driverMonitor::loadFCParams() {
 	load_single_FC_layer("ip2_params", m_ip2_params,
 			sizeof(m_ip2_params) / sizeof(m_ip2_params[0]));
 
-	dumpFCLayer("ip1_params_dumped", m_ip1_params,
-			sizeof(m_ip1_params) / sizeof(m_ip1_params[0]));
-	dumpFCLayer("ip2_params_dumped", m_ip2_params,
-			sizeof(m_ip2_params) / sizeof(m_ip2_params[0]));
+	 dumpFCLayer("ip1_params_dumped", m_ip1_params,
+	 sizeof(m_ip1_params) / sizeof(m_ip1_params[0]));
+	 dumpFCLayer("ip2_params_dumped", m_ip2_params,
+	 sizeof(m_ip2_params) / sizeof(m_ip2_params[0]));
 }
 
 void zs_driverMonitor::load_single_FC_layer(const char *fileName,
@@ -63,10 +249,10 @@ void zs_driverMonitor::evaluateFCLayers() {
 					m_fc1_output[i] += m_ip1_params[i * m_nchIn * m_hinMax
 							* m_imageWidth + j * m_hinMax * m_imageWidth
 							+ k * m_imageWidth + l] * m_image[j][k][l];
-					fprintf(m_log, "%d = %d + %d * %d\n", m_fc1_output[i], old,
-							m_ip1_params[i * m_nchIn * m_hinMax * m_imageWidth
-									+ j * m_hinMax * m_imageWidth
-									+ k * m_imageWidth + l], m_image[j][k][l]);
+					//fprintf(m_log, "%d = %d + %d * %d\n", m_fc1_output[i], old,
+					//		m_ip1_params[i * m_nchIn * m_hinMax * m_imageWidth
+					//				+ j * m_hinMax * m_imageWidth
+					//				+ k * m_imageWidth + l], m_image[j][k][l]);
 				}
 
 			}
@@ -201,9 +387,9 @@ void zs_driverMonitor::setCurrentLayer(unsigned int layerIndex) {
 	m_kernelArray = m_layerParams[layerIndex].kernels;
 	m_biases = m_layerParams[layerIndex].biases;
 
-	fprintf(stderr, "image pointer is %p\n", m_layerParams[layerIndex].image);
-	fprintf(stderr, "first pixel is %d\n",
-			m_layerParams[layerIndex].image[0][0][0]);
+	//fprintf(stderr, "image pointer is %p\n", m_layerParams[layerIndex].image);
+	//fprintf(stderr, "first pixel is %d\n",
+	//		m_layerParams[layerIndex].image[0][0][0]);
 
 	m_image = m_layerParams[layerIndex].image;
 	m_outputImage = m_layerParams[layerIndex + 1].image;
@@ -256,7 +442,7 @@ void zs_driverMonitor::readNetwork(const char *fileName) {
 }
 
 void zs_driverMonitor::checkMarker(FILE *fp, const char * marker) {
-	fprintf(stderr, "checking marker %s\n", marker);
+	//fprintf(stderr, "checking marker %s\n", marker);
 	char line[256];
 	safe_fscanf(fp, "%s", line);
 	if (!strstr(line, marker)) {
@@ -266,7 +452,7 @@ void zs_driverMonitor::checkMarker(FILE *fp, const char * marker) {
 }
 
 void zs_driverMonitor::readLayer(FILE *fp, t_layerParams &layerParam,
-		bool firstLayer) {
+bool firstLayer) {
 	unsigned int * paramsAsArray = ((unsigned int *) (&layerParam));
 
 	unsigned int numParams = 9;
@@ -275,14 +461,14 @@ void zs_driverMonitor::readLayer(FILE *fp, t_layerParams &layerParam,
 		unsigned int temp;
 		safe_fscanf(fp, "%u", &temp);
 		paramsAsArray[i] = temp;
-		fprintf(stderr, " read %u\n", temp);
+		//fprintf(stderr, " read %u\n", temp);
 	}
 
 	//    layerParam.num_input_rows += layerParam.padding*2;
 	//    layerParam.num_input_column += layerParam.padding*2;
 
-	fprintf(stderr, "layer params: %u:%u:%u\n", layerParam.num_input_channels,
-			layerParam.num_output_channels, layerParam.kernel_size);
+	//fprintf(stderr, "layer params: %u:%u:%u\n", layerParam.num_input_channels,
+	//		layerParam.num_output_channels, layerParam.kernel_size);
 
 	initializeKernelArray(layerParam);
 	initializeBiasArray(layerParam);
@@ -439,8 +625,8 @@ void zs_driverMonitor::initializePixelArray(t_layerParams & layerParam) {
 	unsigned int height = layerParam.num_input_rows;
 	unsigned int width = layerParam.num_input_column;
 
-	fprintf(stderr, "initializing pixel array %d:%d:%d\n", num_channels, height,
-			width);
+	//fprintf(stderr, "initializing pixel array %d:%d:%d\n", num_channels, height,
+	//		width);
 
 	image = new int **[num_channels];
 	for (unsigned int i = 0; i < num_channels; ++i) {
@@ -458,7 +644,7 @@ void zs_driverMonitor::initializePixelArray(t_layerParams & layerParam) {
 void zs_driverMonitor::initializeBiasArray(t_layerParams & layerParam) {
 	int * &biases = layerParam.biases;
 	unsigned int num_output_channels = layerParam.num_output_channels;
-	fprintf(stderr, "initializing bias array %d\n", num_output_channels);
+	//fprintf(stderr, "initializing bias array %d\n", num_output_channels);
 
 	biases = new int[num_output_channels];
 	for (unsigned int i = 0; i < num_output_channels; ++i)
@@ -470,8 +656,8 @@ void zs_driverMonitor::initializeKernelArray(t_layerParams & layerParam) {
 	unsigned int kernel_size = layerParam.kernel_size;
 	unsigned int num_input_channels = layerParam.num_input_channels;
 	unsigned int num_output_channels = layerParam.num_output_channels;
-	fprintf(stderr, "initializing kernel array %d:%d:%d:%d\n",
-			num_output_channels, num_input_channels, kernel_size, kernel_size);
+	//fprintf(stderr, "initializing kernel array %d:%d:%d:%d\n",
+	//		num_output_channels, num_input_channels, kernel_size, kernel_size);
 
 	kernelArray = new int ***[num_output_channels];
 
@@ -550,10 +736,10 @@ int zs_driverMonitor::getGroundTruthPixel(unsigned int outputChannel, int xPos,
 
 		//result = truncateInt(result + mulResult ,12);
 	}
-	if (debug)
-		fprintf(stderr, "bias %d , sum before bias %d\n",
-				m_biases[outputChannel * (m_nchOut_pseudo / m_nchOut)] << 8,
-				fullResResult);
+	/*if (debug)
+	 fprintf(stderr, "bias %d , sum before bias %d\n",
+	 m_biases[outputChannel * (m_nchOut_pseudo / m_nchOut)] << 8,
+	 fullResResult);*/
 
 	fullResResult += (m_biases[outputChannel * (m_nchOut_pseudo / m_nchOut)]
 			<< 8);
@@ -594,13 +780,13 @@ bool zs_driverMonitor::initializationLoop() {
 	if (m_currentInitStep <= config_kernel_memory_resetn_pulse) {
 		sendConfigData((CONFIG_TYPE) m_currentInitStep,
 				m_initConfig[m_currentInitStep]);
-		fprintf(stderr, "initi step %d\n", m_currentInitStep);
+		//fprintf(stderr, "initi step %d\n", m_currentInitStep);
 		++m_currentInitStep;
 		return false;
 	} else {
 		if (m_currentInitStep == config_kernel_memory_resetn_pulse + 1) {
 			sendConfigData(config_padding_set, m_inputLayerPadding);
-			fprintf(stderr, "initi step padding %d\n", m_currentInitStep);
+			//fprintf(stderr, "initi step padding %d\n", m_currentInitStep);
 			++m_currentInitStep;
 			return false;
 		}
@@ -651,87 +837,125 @@ uint16_t zs_driverMonitor::int_to_short(int data) {
 }
 
 void zs_driverMonitor::writeToAxi() {
-#ifdef FPGA_MODE
-	/*fprintf(m_axiDebug,"outputStreamEnable %d, input_bus_valid %d, input_bus_config_reg_addr %d:%d, input_bus_type %d, input bus data %d:%d, resetn %d\n",input_sigs->s_output_pixel_stream_enable,
-	 input_sigs->s_input_bus_valid,input_sigs->s_input_bus_config_reg_addr[0],input_sigs->s_input_bus_config_reg_addr[1],input_sigs->s_input_bus_type,input_sigs->s_input_bus_data[0],input_sigs->s_input_bus_data[1],input_sigs->s_resetn);*/
 
-	//    printf("writing to axi\n");
 	unsigned int axiWord[2];
-	memset(axiWord,0,sizeof(unsigned int)*2);
+	memset(axiWord, 0, sizeof(unsigned int) * 2);
 
-	axiWord[0] = ((unsigned int) int_to_short(input_sigs->s_input_bus_data[0]) |
-			(unsigned int) int_to_short(input_sigs->s_input_bus_data[1])<<16);
+	axiWord[0] =
+			((unsigned int) int_to_short(input_sigs->s_input_bus_data[0])
+					| (unsigned int) int_to_short(
+							input_sigs->s_input_bus_data[1]) << 16);
 
-	axiWord[1] = (unsigned int) int_to_short(input_sigs->s_input_bus_type) |
-	((unsigned int) int_to_short(input_sigs->s_input_bus_valid) << 2) |
-	((unsigned int) int_to_short(input_sigs->s_input_bus_config_reg_addr[0]) << 4) |
-	((unsigned int) int_to_short(input_sigs->s_input_bus_config_reg_addr[1]) << 11);
+	axiWord[1] = (unsigned int) int_to_short(input_sigs->s_input_bus_type)
+			| ((unsigned int) int_to_short(input_sigs->s_input_bus_valid) << 2)
+			| ((unsigned int) int_to_short(
+					input_sigs->s_input_bus_config_reg_addr[0]) << 4)
+			| ((unsigned int) int_to_short(
+					input_sigs->s_input_bus_config_reg_addr[1]) << 11);
 
 	//fprintf(m_axiDebug,"lo %d, hi %d\n",axiWord[0],axiWord[1]);
-	m_axiDebug = fopen("axiDebug","a");
-	fprintf(m_axiDebug,"%08x%08x\n",axiWord[1],axiWord[0]);
-	fclose(m_axiDebug);
+	/*m_axiDebug = fopen("axiDebug","a");
+	 fprintf(m_axiDebug,"%08x%08x\n",axiWord[1],axiWord[0]);
+	 fclose(m_axiDebug);*/
 
-	if(m_firstAxiWrite)
-	{
-		printf("first axi write setting \n");
-		axiWord[1] |= (1<<18);
-		axiWord[1] |= (MAX_BURST <<19); //(m_maxOutPixelsNum << 19);
+	/*printf("virtual source address  %p\n", virtual_source_address_);
+	 printf("virtual address  %p\n", virtual_address_);
+	 printf("virtual destination address  %p\n", virtual_destination_address_);*/
+
+	if (m_firstAxiWrite) {
+		//printf("first axi write setting \n");
+		axiWord[1] |= (1 << 18);
+		axiWord[1] |= (MAX_BURST << 19); //(m_maxOutPixelsNum << 19);
 		m_firstAxiWrite = false;
 	}
 
-	if(current_write >= MEM_SIZE-2)
-	{
+	if (current_write >= MEM_SIZE - 2) {
 		printf("exceeded memory mapped area for AXI write, committing first\n");
 		axiWriteCommit();
 	}
 
-	virtual_source_address[current_write] = axiWord[0];
-	virtual_source_address[current_write+1] = axiWord[1];
-	current_write+=2;
-#endif
+	virtual_source_address_[current_write] = axiWord[0];
+	virtual_source_address_[current_write + 1] = axiWord[1];
+	current_write += 2;
 
 }
 
 void zs_driverMonitor::axiWriteCommit() {
-#ifdef FPGA_MODE
 
-	if(current_write==0)
-	return;
-	fprintf(stderr,"committing axi writes\n");
+	if (current_write == 0)
+		return;
+	//fprintf(stderr,"committing axi writes\n");
 
 	unsigned int size_int = sizeof(int);
 
-	unsigned int padding = (MAX_BURST*(TRANSLEN/size_int)) - (current_write % (MAX_BURST*(TRANSLEN/size_int)));
-	int loPadding = virtual_source_address[current_write-2];
-	int hiPadding = virtual_source_address[current_write-1] & (~(12)); //set valid bits to zero
+	unsigned int padding = (MAX_BURST * (TRANSLEN_ / size_int))
+			- (current_write % (MAX_BURST * (TRANSLEN_ / size_int)));
+	int loPadding = virtual_source_address_[current_write - 2];
+	int hiPadding = virtual_source_address_[current_write - 1] & (~(12)); //set valid bits to zero
 
-	for(unsigned int i=0;i<padding/2;++i)
-	{
-		virtual_source_address[current_write] = loPadding;
-		virtual_source_address[current_write+1] = hiPadding;
-		current_write+=2;
+	for (unsigned int i = 0; i < padding / 2; ++i) {
+		virtual_source_address_[current_write] = loPadding;
+		virtual_source_address_[current_write + 1] = hiPadding;
+		current_write += 2;
 	}
 
-	for(unsigned int i=0;i<current_write;i+=MAX_BURST*(TRANSLEN/size_int)) //we are writing MAX_BURST*TRANSLEN bytes per iteration
-	{
-		unsigned int startPos = i*size_int; //start position for transfer in bytes
+	for (unsigned int i = 0; i < current_write;
+			i += MAX_BURST * (TRANSLEN_ / size_int)) //we are writing MAX_BURST*TRANSLEN bytes per iteration
+					{
+		unsigned int startPos = i * size_int; //start position for transfer in bytes
 
-		unsigned int burst_size = min(MAX_BURST*TRANSLEN,(current_write-i)*size_int);
+		unsigned int burst_size = min(MAX_BURST * TRANSLEN_,
+				(current_write - i) * size_int);
 
-		printf("writing %d starting from %d\n",burst_size,startPos);
+		//printf("writing %d starting from %d\n",burst_size,startPos);
 
-		if(burst_size != MAX_BURST*TRANSLEN)
-		fprintf(stderr,"error in padding\n");
+		if (burst_size != MAX_BURST * TRANSLEN_)
+			fprintf(stderr, "error in padding\n");
 
-		writeAxiCommit(MAX_BURST,startPos);
+		writeAxiCommit_(MAX_BURST, startPos);
 
 	}
 
 	current_write = 0;
 
-	printf("finished committing axi writes\n");
-#endif
+	//printf("axiwrite commit\n");
+	//printf("finished committing axi writes\n");
+
+}
+
+int zs_driverMonitor::writeAxiCommit_(int wordsNumber, unsigned int startPos) {
+
+	//printf("%p \n", (void*)virtual_address_);
+
+	int numbytes = 0;
+
+	if (wordsNumber > 0 || wordsNumber <= 64) {
+
+		dma_s2mm_sync_halted_and_notIDLE_(virtual_address_);
+
+		// Set destination and source addresses
+		//dma_set(virtual_address, S2MM_DESTINATION_ADDRESS, dest_addr_offset);
+		dma_set_(virtual_address_, MM2S_START_ADDRESS_,
+				src_addr_offset_ + startPos);
+
+		// Enable interruptions and start S2MM and MM2S
+		//dma_set(virtual_address, S2MM_CONTROL_REGISTER, 0xf001);
+		dma_set_(virtual_address_, MM2S_CONTROL_REGISTER_, 0xf001);
+
+		// Set tranference length for S2MM and MM2S. S2MM must be set before MM2S. In this point the tranferece starts
+		//dma_set(virtual_address, S2MM_LENGTH, TRANSLEN*wordsNumber);
+		dma_set_(virtual_address_, MM2S_LENGTH_, TRANSLEN_ * wordsNumber);
+
+		dma_mm2s_sync_(virtual_address_);
+
+		dma_set_(virtual_address_, MM2S_CONTROL_REGISTER_, 0); // Stop MM2S
+		//dma_set(virtual_address, MM2S_STATUS_REGISTER, 2); // Clear idle
+		dma_set_(virtual_address_, MM2S_STATUS_REGISTER_, 0x1000); // Clear IOC_Irq
+
+		numbytes = TRANSLEN_ * wordsNumber;
+	}
+
+	return numbytes;
 }
 
 unsigned int zs_driverMonitor::reverseInt(unsigned int src) {
@@ -743,60 +967,45 @@ unsigned int zs_driverMonitor::reverseInt(unsigned int src) {
 	return res;
 }
 
+void zs_driverMonitor::stopS2MM_() {
+	dma_set_(virtual_address_, S2MM_CONTROL_REGISTER_, 0); // Stop S2MM
+	dma_set_(virtual_address_, S2MM_STATUS_REGISTER_, 2); // Clear idle
+	dma_set_(virtual_address_, S2MM_STATUS_REGISTER_, 0x1000); // Clear IOC_Irq
+}
+
 void zs_driverMonitor::readFromAxi() {
-#ifdef FPGA_MODE
-	/*if(waitValidAxiDataToRead()){
-	 printf("reading from AXI...\n");
 
-	 //memdump((char *)virtual_destination_address, TRANSLEN*MAX_BURST);
-	 //printf("read data from AXI: ");
-	 unsigned int size_int = sizeof(int);
-	 for(unsigned int i=0;i<MAX_BURST*(TRANSLEN/size_int);i+=2)
-	 {
-	 //printf("reading axi data : low int %08x, high int %08x, reversed low int %08x, reversed high int %08x\n",virtual_destination_address[i],virtual_destination_address[i+1],reverseInt(virtual_destination_address[i]),reverseInt(virtual_destination_address[i+1]));
-
-	 fprintf(m_readAxiFile, "Reading from axi: high int %08x, low int %08x\n",virtual_destination_address[i+1], virtual_destination_address[i]);
-	 //fprintf(m_readWordsAxiFile, "%08x%08x\n",virtual_destination_address[i+1], virtual_destination_address[i]);
-	 m_readWordsAxiFile = fopen("readWordsAxiFile", "a");
-	 fprintf(m_readWordsAxiFile, "%08x%08x\n",virtual_destination_address[i+1], virtual_destination_address[i]);
-	 fclose(m_readWordsAxiFile);
-	 output_sigs->s_output_pixel_stream = virtual_destination_address[i] ;
-	 output_sigs->s_output_pixel_stream_valid = (virtual_destination_address[i+1] & 3);
-	 phase1_step();
-	 }
-	 configureS2MM(MAX_BURST);
-	 s2mm_wait_counter = 0;
-	 }else{
-	 s2mm_wait_counter++;
-	 if(s2mm_wait_counter == MAX_S2MM_WAIT_COUNTER){
-	 printf("Finishing the read thread...\n");
-	 pthread_exit(virtual_destination_address);
-	 }
-	 }*/
-	waitValidAxiDataToRead(MAX_BURST);
-	printf("reading from AXI...\n");
-	//memdump((char *)virtual_destination_address, TRANSLEN*MAX_BURST);
+	//printf("start reading \n");
+	waitValidAxiDataToRead_(MAX_BURST);
+	//printf("reading from AXI...\n");
 	unsigned int size_int = sizeof(int);
-	for(unsigned int i=0;i<MAX_BURST*(TRANSLEN/size_int);i+=2)
-	{
+	for (unsigned int i = 0; i < MAX_BURST * (TRANSLEN_ / size_int); i += 2) {
 		//printf("reading axi data : low int %08x, high int %08x, reversed low int %08x, reversed high int %08x\n",virtual_destination_address[i],virtual_destination_address[i+1],reverseInt(virtual_destination_address[i]),reverseInt(virtual_destination_address[i+1]));
 
-		fprintf(m_readAxiFile, "Reading from axi: high int %08x, low int %08x\n",virtual_destination_address[i+1], virtual_destination_address[i]);
+		fprintf(m_readAxiFile,
+				"Reading from axi: high int %08x, low int %08x\n",
+				virtual_destination_address_[i + 1],
+				virtual_destination_address_[i]);
 		//fprintf(m_readWordsAxiFile, "%08x%08x\n",virtual_destination_address[i+1], virtual_destination_address[i]);
 		m_readWordsAxiFile = fopen("readWordsAxiFile", "a");
-		fprintf(m_readWordsAxiFile, "%08x%08x\n",virtual_destination_address[i+1], virtual_destination_address[i]);
+		fprintf(m_readWordsAxiFile, "%08x%08x\n",
+				virtual_destination_address_[i + 1],
+				virtual_destination_address_[i]);
 		fclose(m_readWordsAxiFile);
-		output_sigs->s_output_pixel_stream = virtual_destination_address[i];
-		output_sigs->s_output_pixel_stream_valid = (virtual_destination_address[i+1] & 3);
+		output_sigs->s_output_pixel_stream = virtual_destination_address_[i];
+		output_sigs->s_output_pixel_stream_valid =
+				(virtual_destination_address_[i + 1] & 3);
 		/*if(output_sigs->s_output_pixel_stream == 0 && output_sigs->s_output_pixel_stream_valid == 0){
 		 printf("CompletedImageWrite = %d, gotAllPixels = %d\n", m_completedImageWrite, m_gotAllPixels);
 		 printf("Current_layer = %d, Num_layers = %d\n", m_currentLayer, m_numLayers);
 		 }*/
-		if(output_sigs->s_output_pixel_stream == 0 && output_sigs->s_output_pixel_stream_valid == 0 && m_currentLayer == m_numLayers) {
+		if (output_sigs->s_output_pixel_stream == 0
+				&& output_sigs->s_output_pixel_stream_valid == 0
+				&& m_currentLayer == m_numLayers) {
 			//printf("Finishing read thread.... | current_layer = %d, num_layers = %d\n", m_currentLayer, m_numLayers);
-			printf("Finishing read thread...\n");
+			//printf("Finishing read thread...\n");
 			fclose(m_readAxiFile);
-			stopS2MM();
+			stopS2MM_();
 			//exit(1);
 			//pthread_exit(virtual_destination_address, virtual_address);
 			pthread_exit(NULL);
@@ -805,7 +1014,6 @@ void zs_driverMonitor::readFromAxi() {
 		phase1_step();
 
 	}
-#endif
 }
 
 bool zs_driverMonitor::matchToPatch(int output_pixel, int pixel_ch,
@@ -813,12 +1021,12 @@ bool zs_driverMonitor::matchToPatch(int output_pixel, int pixel_ch,
 	//    fprintf(stderr,"in match to patch %d at ch:col:row:mac_index %d:%d:%d %d\n",output_pixel,pixel_ch,pixel_xpos,pixel_ypos,mac_index);
 	int currentPatchValue =
 			m_activePatch[mac_index][pixel_ch][pixel_ypos][pixel_xpos];
-	fprintf(m_log, "***********current MAC index %d\n", mac_index);
+	//fprintf(m_log, "***********current MAC index %d\n", mac_index);
 
 	if (output_pixel == currentPatchValue) {
-		fprintf(m_log, "Pixel already matched at %d at ch:col:row %d:%d:%d \n",
-				output_pixel, pixel_ch, pixel_xpos, pixel_ypos);
-		fflush(m_log);
+		//fprintf(m_log, "Pixel already matched at %d at ch:col:row %d:%d:%d \n",
+		//		output_pixel, pixel_ch, pixel_xpos, pixel_ypos);
+		//fflush(m_log);
 		return true;
 	}
 
@@ -838,11 +1046,11 @@ bool zs_driverMonitor::matchToPatch(int output_pixel, int pixel_ch,
 	}
 
 	if (activePos == m_idpBuffer_pos) {
-		fprintf(m_log,
-				"Failed to find a candidate input pixel for for output pixel %d at ch:col:row %d:%d:%d . num pixels in buffer %d\n",
-				output_pixel, pixel_ch, pixel_xpos, pixel_ypos,
-				m_idpBuffer_pos);
-		fflush(m_log);
+		//fprintf(m_log,
+		//		"Failed to find a candidate input pixel for for output pixel %d at ch:col:row %d:%d:%d . num pixels in buffer %d\n",
+		//		output_pixel, pixel_ch, pixel_xpos, pixel_ypos,
+		//		m_idpBuffer_pos);
+		//fflush(m_log);
 		return false;
 	}
 
@@ -853,18 +1061,18 @@ bool zs_driverMonitor::matchToPatch(int output_pixel, int pixel_ch,
 
 	if (actualYPos < pixel_ypos + m_hk && actualYPos >= pixel_ypos)
 		if (column_start < pixel_xpos + m_wk && column_start >= pixel_xpos) {
-			fprintf(m_log, "currentPixel pixel %d at ch:col:row %d:%d:%d . \n",
-					output_pixel, pixel_ch, pixel_xpos, pixel_ypos);
-			fprintf(m_log, "current indices ch:col:row:shift %d:%d:%d:%d\n",
-					channel_start, column_start, row_start, shift_start);
+			//fprintf(m_log, "currentPixel pixel %d at ch:col:row %d:%d:%d . \n",
+			//		output_pixel, pixel_ch, pixel_xpos, pixel_ypos);
+			//fprintf(m_log, "current indices ch:col:row:shift %d:%d:%d:%d\n",
+			//		channel_start, column_start, row_start, shift_start);
 
-			fprintf(m_log,
-					"current kernel (out_ch:in_ch:ypos:xpos %d:%d:%d:%d) and input pixel and patch %d %d %d. input pixel buffer position %d and considered once %d \n",
-					pixel_ch, channel_start, actualYPos - pixel_ypos,
-					column_start - pixel_xpos,
-					m_kernelArray[pixel_ch + m_outputChannelOffset][channel_start][actualYPos
-							- pixel_ypos][column_start - pixel_xpos],
-					input_pixel, currentPatchValue, activePos, consideredOnce);
+			//fprintf(m_log,
+			//		"current kernel (out_ch:in_ch:ypos:xpos %d:%d:%d:%d) and input pixel and patch %d %d %d. input pixel buffer position %d and considered once %d \n",
+			//		pixel_ch, channel_start, actualYPos - pixel_ypos,
+			//		column_start - pixel_xpos,
+			//		m_kernelArray[pixel_ch + m_outputChannelOffset][channel_start][actualYPos
+			//				- pixel_ypos][column_start - pixel_xpos],
+			//		input_pixel, currentPatchValue, activePos, consideredOnce);
 
 			int candidate =
 					currentPatchValue
@@ -877,16 +1085,16 @@ bool zs_driverMonitor::matchToPatch(int output_pixel, int pixel_ch,
 			if (candidate == output_pixel) {
 				m_activePatch[mac_index][pixel_ch][pixel_ypos][pixel_xpos] =
 						output_pixel;
-				fprintf(m_log, "setting patch %d:%d:%d to %d\n", pixel_ch,
-						pixel_ypos, pixel_xpos, output_pixel);
+				/*fprintf(m_log, "setting patch %d:%d:%d to %d\n", pixel_ch,
+				 pixel_ypos, pixel_xpos, output_pixel);*/
 				m_processedPixels[channel_start][actualYPos][column_start]++;
 				unsigned int currentPixelIndex = (shift_start + row_start)
 						* m_imageWidth * m_nchIn + column_start * m_nchIn
 						+ channel_start;
-				fprintf(m_log,
-						"debug currentPixelIndex: %d, m_previousPixelIndex : %d, currentPatchValue : %d, output_pixel : %d\n",
-						currentPixelIndex, m_previousPixelIndex[mac_index],
-						currentPatchValue, output_pixel);
+				/*fprintf(m_log,
+				 "debug currentPixelIndex: %d, m_previousPixelIndex : %d, currentPatchValue : %d, output_pixel : %d\n",
+				 currentPixelIndex, m_previousPixelIndex[mac_index],
+				 currentPatchValue, output_pixel);*/
 				if (currentPixelIndex != m_previousPixelIndex[mac_index]) {
 					m_previousPixelIndex[mac_index] = currentPixelIndex;
 					if (currentPatchValue != output_pixel) {
@@ -897,27 +1105,27 @@ bool zs_driverMonitor::matchToPatch(int output_pixel, int pixel_ch,
 										if (actualYPos - j < shift_start + 2)
 											if (pixel_xpos
 													!= column_start - k) {
-												fprintf(m_log,
-														"setting extended patch %d:%d:%d  %d",
-														pixel_ch,
-														actualYPos - j,
-														column_start - k,
-														m_activePatch[mac_index][pixel_ch][actualYPos
-																- j][column_start
-																- k]);
+												/*fprintf(m_log,
+												 "setting extended patch %d:%d:%d  %d",
+												 pixel_ch,
+												 actualYPos - j,
+												 column_start - k,
+												 m_activePatch[mac_index][pixel_ch][actualYPos
+												 - j][column_start
+												 - k]);*/
 												m_activePatch[mac_index][pixel_ch][actualYPos
 														- j][column_start - k] +=
 														input_pixel
 																* m_kernelArray[pixel_ch
 																		+ m_outputChannelOffset][channel_start][j][k];
-												fprintf(m_log,
-														"  ---->  %d (%d*%d)\n",
-														m_activePatch[mac_index][pixel_ch][actualYPos
-																- j][column_start
-																- k],
-														input_pixel,
-														m_kernelArray[pixel_ch
-																+ m_outputChannelOffset][channel_start][j][k]);
+												/*fprintf(m_log,
+												 "  ---->  %d (%d*%d)\n",
+												 m_activePatch[mac_index][pixel_ch][actualYPos
+												 - j][column_start
+												 - k],
+												 input_pixel,
+												 m_kernelArray[pixel_ch
+												 + m_outputChannelOffset][channel_start][j][k]);*/
 
 											}
 							}
@@ -933,17 +1141,17 @@ bool zs_driverMonitor::matchToPatch(int output_pixel, int pixel_ch,
 					m_idp_positionConsideredOnce[mac_index] = true;
 				}
 
-				fflush(m_log);
+				//fflush(m_log);
 				return true;
 
 			}
 		}
 
-	fprintf(m_log,
-			"candidate pixel failed to match at buffer position %d for output pixel %d at ch:col:row %d:%d:%d . num pixels in buffer %d\n",
-			activePos, output_pixel, pixel_ch, pixel_xpos, pixel_ypos,
-			m_idpBuffer_pos);
-	fflush(m_log);
+	/*fprintf(m_log,
+	 "candidate pixel failed to match at buffer position %d for output pixel %d at ch:col:row %d:%d:%d . num pixels in buffer %d\n",
+	 activePos, output_pixel, pixel_ch, pixel_xpos, pixel_ypos,
+	 m_idpBuffer_pos);
+	 fflush(m_log);*/
 	return false;
 }
 
@@ -999,8 +1207,8 @@ void zs_driverMonitor::generateSMandPixels(unsigned int outputHeight,
 		if (maxPixel != 0)
 			generatedSM |= (1 << SMidx);
 
-		if (tempPos > 270)
-			std::cout << "generatedSM     " << generatedSM << std::endl;
+		//if (tempPos > 270)
+		//	std::cout << "generatedSM     " << generatedSM << std::endl;
 
 		if ((maxPixel < 0) & (m_reluEnabled == 1))
 			std::cout
@@ -1022,9 +1230,7 @@ void zs_driverMonitor::phase1_step() {
 	unsigned int unpooled_outputWidth = m_imageWidth - m_wk + 1
 			+ m_inputLayerPadding * 2;
 
-#ifndef FPGA_MODE
-
-	std::cout << "PHASE 1 STARTED     " << std::endl;
+	//std::cout << "PHASE 1 STARTED     " << std::endl;
 	if (m_completedKernelWrite) {
 		unsigned int outputChannel = 0;
 		unsigned int macsPerChannel = m_macs_per_channel;
@@ -1053,14 +1259,14 @@ void zs_driverMonitor::phase1_step() {
 						output_sigs->idp_macs_pixels_channel_debug_s[i];
 				m_idp_mac_index[m_idpBuffer_pos] = i;
 
-				fprintf(m_log,
-						"got pixel %d at ch:row:col %d:%d:%d at MAC %d : row start %d, buffer pos %d ",
-						m_idp_pixels[m_idpBuffer_pos],
-						m_idp_channel[m_idpBuffer_pos],
-						m_idp_row[m_idpBuffer_pos],
-						m_idp_column[m_idpBuffer_pos], i,
-						output_sigs->row_start_to_decoders_debug_s[i],
-						m_idpBuffer_pos);
+				/*fprintf(m_log,
+				 "got pixel %d at ch:row:col %d:%d:%d at MAC %d : row start %d, buffer pos %d ",
+				 m_idp_pixels[m_idpBuffer_pos],
+				 m_idp_channel[m_idpBuffer_pos],
+				 m_idp_row[m_idpBuffer_pos],
+				 m_idp_column[m_idpBuffer_pos], i,
+				 output_sigs->row_start_to_decoders_debug_s[i],
+				 m_idpBuffer_pos);*/
 				//	      fprintf(stderr,"got pixel %d at ch:row:col %d:%d:%d at MAC %d\n",m_idp_pixels[m_idpBuffer_pos],m_idp_channel[m_idpBuffer_pos],m_idp_row[m_idpBuffer_pos],m_idp_column[m_idpBuffer_pos],i);
 				if (output_sigs->row_start_to_decoders_debug_s[i])
 					m_mac_stripe_index[i] += 2;
@@ -1080,31 +1286,31 @@ void zs_driverMonitor::phase1_step() {
 										- m_inputLayerPadding]) {
 							correctPixel = true;
 							m_idp_shift[m_idpBuffer_pos] = k;
-							fprintf(m_log, "row shift %d\n", k);
+							//fprintf(m_log, "row shift %d\n", k);
 
-							//			    break;
+							//break;
 						}
 					//		    }
 				}
 
 				if (!correctPixel) {
-					fprintf(m_log,
-							"received invalid input pixel %d at ch:row:col %d:%d:%d\n",
-							m_idp_pixels[m_idpBuffer_pos],
-							m_idp_channel[m_idpBuffer_pos],
-							m_idp_row[m_idpBuffer_pos],
-							m_idp_column[m_idpBuffer_pos]);
-					fprintf(stderr,
-							"received invalid input pixel %d at ch:row:col %d:%d:%d\n",
-							m_idp_pixels[m_idpBuffer_pos],
-							m_idp_channel[m_idpBuffer_pos],
-							m_idp_row[m_idpBuffer_pos],
-							m_idp_column[m_idpBuffer_pos]);
-					fprintf(m_log, "correct pixel is %d\n",
-							m_image[m_idp_channel[m_idpBuffer_pos]][m_idp_row[m_idpBuffer_pos]
-									+ m_mac_stripe_index[i]
-									- m_inputLayerPadding][m_idp_column[m_idpBuffer_pos]
-									- m_inputLayerPadding]);
+					/*fprintf(m_log,
+					 "received invalid input pixel %d at ch:row:col %d:%d:%d\n",
+					 m_idp_pixels[m_idpBuffer_pos],
+					 m_idp_channel[m_idpBuffer_pos],
+					 m_idp_row[m_idpBuffer_pos],
+					 m_idp_column[m_idpBuffer_pos]);
+					 fprintf(stderr,
+					 "received invalid input pixel %d at ch:row:col %d:%d:%d\n",
+					 m_idp_pixels[m_idpBuffer_pos],
+					 m_idp_channel[m_idpBuffer_pos],
+					 m_idp_row[m_idpBuffer_pos],
+					 m_idp_column[m_idpBuffer_pos]);
+					 fprintf(m_log, "correct pixel is %d\n",
+					 m_image[m_idp_channel[m_idpBuffer_pos]][m_idp_row[m_idpBuffer_pos]
+					 + m_mac_stripe_index[i]
+					 - m_inputLayerPadding][m_idp_column[m_idpBuffer_pos]
+					 - m_inputLayerPadding]);*/
 				} else
 					++m_idpBuffer_pos;
 				//	      fprintf(stderr,"got pixel again %d at ch:row:col %d:%d:%d\n",m_idp_pixels[m_idpBuffer_pos],m_idp_channel[m_idpBuffer_pos],m_idp_row[m_idpBuffer_pos],m_idp_column[m_idpBuffer_pos]);
@@ -1240,8 +1446,8 @@ void zs_driverMonitor::phase1_step() {
 			if (m_currentOutputRow[i] >= unpooled_outputHeight) {
 				fprintf(stderr,
 						"**************ERROR: GOT extra output pixels\n");
-				fprintf(m_log,
-						"**************ERROR: GOT extra output pixels\n");
+				//fprintf(m_log,
+				//		"**************ERROR: GOT extra output pixels\n");
 			}
 			++m_currentOutputCol[i];
 			if (m_currentOutputCol[i] == unpooled_outputWidth) {
@@ -1251,7 +1457,6 @@ void zs_driverMonitor::phase1_step() {
 
 		}
 	//    fprintf(stderr,"end of macs \n");
-#endif // end ifndef FPGA_MODE. Calculate debug values of MACs output.
 
 	unsigned int outputHeight = unpooled_outputHeight;
 	unsigned int outputWidth = unpooled_outputWidth;
@@ -1262,10 +1467,10 @@ void zs_driverMonitor::phase1_step() {
 
 	if (output_sigs->s_output_pixel_stream_valid) {
 		int out_stream = output_sigs->s_output_pixel_stream;
-		fprintf(m_log,
-				"stream valid: %d, stream value %08x (low %d, high %d)\n",
-				output_sigs->s_output_pixel_stream_valid, out_stream,
-				out_stream & (0xFFFF), (out_stream & (0xFFFF0000)) >> 16);
+		/*fprintf(m_log,
+		 "stream valid: %d, stream value %08x (low %d, high %d)\n",
+		 output_sigs->s_output_pixel_stream_valid, out_stream,
+		 out_stream & (0xFFFF), (out_stream & (0xFFFF0000)) >> 16);*/
 
 		fprintf(m_readAxiFile,
 				"stream valid: %d, stream value %08x (low %d, high %d)\n",
@@ -1476,16 +1681,16 @@ void zs_driverMonitor::phase1_step() {
 					fprintf(m_readAxiFile,
 							"*********************** ERROR when decoding output of PRE block, in position row:col:ch %d:%d:%d  ---  got pixel %d, expected %d\n",
 							yPos, xPos, chIdx, outputPixel, SMpixels[MSB_one]);
-					std::cout << "++++++++ ERROR: outputPixel " << std::setw(8)
-							<< outputPixel << std::setw(8)
-							<< " is different from SMpixels[" << MSB_one << "]"
-							<< std::setw(16) << SMpixels[MSB_one] << std::endl;
+					//std::cout << "++++++++ ERROR: outputPixel " << std::setw(8)
+					//		<< outputPixel << std::setw(8)
+					//		<< " is different from SMpixels[" << MSB_one << "]"
+					//		<< std::setw(16) << SMpixels[MSB_one] << std::endl;
 					error_counter++;
 					fprintf(m_readAxiFile,
 							"*********************** ERROR number %d\n",
 							error_counter);
-					std::cout << "error_counter: " << error_counter
-							<< std::endl;
+					//std::cout << "error_counter: " << error_counter
+					//		<< std::endl;
 				} else
 					fprintf(m_readAxiFile,
 							"Successfully matched output of PRE block: got pixel %d at row:col:ch %d,%d,%d. Expected %d \n",
@@ -1498,9 +1703,9 @@ void zs_driverMonitor::phase1_step() {
 				if (m_currentDecodeSM == 0
 						&& (m_currentDecodeIndex + 16)
 								== outputHeight * outputWidth * m_nchOut) {
-					fprintf(stderr,
-							"++++++++++++++++++++++++++++++++++++++++++Got all pixels %d\n",
-							outputHeight * outputWidth * m_nchOut);
+					//fprintf(stderr,
+					//		"++++++++++++++++++++++++++++++++++++++++++Got all pixels %d\n",
+					//		outputHeight * outputWidth * m_nchOut);
 					fprintf(m_readAxiFile,
 							"++++++++++++++++++++++++++++++++++++++++++Got all pixels %d\n",
 							outputHeight * outputWidth * m_nchOut);
@@ -1592,9 +1797,9 @@ void zs_driverMonitor::phase2_step() {
 
 	else if (m_kernelWritePos
 			== m_nchIn_pseudo * m_nchOut_pseudo * m_wk * m_hk) {
-		fprintf(stderr, "sending kernel write complete pulse\n");
+		//fprintf(stderr, "sending kernel write complete pulse\n");
 		sendConfigData(config_kernel_memory_write_complete_pulse, 1);
-		fprintf(stderr, "finished sending kernel write complete pulse\n");
+		//fprintf(stderr, "finished sending kernel write complete pulse\n");
 		++m_kernelWritePos;
 	}
 
@@ -1604,8 +1809,8 @@ void zs_driverMonitor::phase2_step() {
 	}
 
 	else if (!m_sent_image_ready && m_currentInputPass != 0) {
-		fprintf(stderr, "sending image ready signal in pass %d\n",
-				m_currentInputPass);
+		//fprintf(stderr, "sending image ready signal in pass %d\n",
+		//		m_currentInputPass);
 		sendConfigData(CONFIG_TYPE(20), 1);
 		m_completedImageWrite = true;
 		m_sent_image_ready = true;
@@ -1751,7 +1956,7 @@ void zs_driverMonitor::phase2_step() {
 
 					else if (SM != 0) {
 						writePixels(SM, m_pixelArray[m_pixelArrayWritePos],
-								true, instruction);
+						true, instruction);
 						memset(instruction, 0, 2 * sizeof(int));
 
 						fprintf(m_logPixels,
@@ -1829,22 +2034,18 @@ double zs_driverMonitor::getSparsity() {
 }
 
 void zs_driverMonitor::processingLoop(unsigned int currentStep) {
-#ifdef FPGA_MODE
-	if(m_currentLayer >= m_numLayers)
-	sleep(1);
-#else
-	if (m_currentLayer >= m_numLayers)
-		return;
-#endif
+
+	if (m_currentLayer >= m_numLayers) {
+		sleep(1);
+	}
+
 	if (!m_activeProcessing) {
 		setCurrentLayer(m_currentLayer);
 		initializeInternalVariables();
 		initializeConfigArray();
 	}
 
-#ifndef FPGA_MODE
 	phase1_step();
-#endif
 
 	phase2_step();
 
@@ -1854,9 +2055,9 @@ void zs_driverMonitor::processingLoop(unsigned int currentStep) {
 		dumpWaveforms(currentStep);
 		m_activeProcessing = false;
 		++m_currentInputPass;
-		fprintf(stderr,
-				"+++++++++ Finished processing layer %d, pass %d of %d\n",
-				m_currentLayer, m_currentInputPass, m_numInputPasses);
+		//fprintf(stderr,
+		//		"+++++++++ Finished processing layer %d, pass %d of %d\n",
+		//		m_currentLayer, m_currentInputPass, m_numInputPasses);
 		if (m_currentInputPass == m_numInputPasses) {
 			m_currentInputPass = 0;
 			++m_currentLayer;
@@ -1864,19 +2065,19 @@ void zs_driverMonitor::processingLoop(unsigned int currentStep) {
 
 		if (m_currentLayer == m_numLayers) {
 
-			fprintf(stderr,
-					"\n\n\n ************** evaluating FC layers **************\n");
+			//fprintf(stderr,
+			//		"\n\n\n ************** evaluating FC layers **************\n");
 			evaluateFCLayers();
 
-			fprintf(stderr, "\n *** \n First FC layer output: \n");
-			for (unsigned int i = 0; i < IP1_OP_SIZE; i++) {
-				fprintf(stderr, "m_fc1_output[%d]: %d \n", i, m_fc1_output[i]);
-			}
+			/*fprintf(stderr, "\n *** \n First FC layer output: \n");
+			 for (unsigned int i = 0; i < IP1_OP_SIZE; i++) {
+			 fprintf(stderr, "m_fc1_output[%d]: %d \n", i, m_fc1_output[i]);
+			 }*/
 
-			fprintf(stderr, "\n *** \n Second FC layer output: \n");
-			for (unsigned int i = 0; i < IP2_OP_SIZE; i++) {
-				fprintf(stderr, "m_fc2_output[%d]: %d \n", i, m_fc2_output[i]);
-			}
+			/*fprintf(stderr, "\n *** \n Second FC layer output: \n");
+			 for (unsigned int i = 0; i < IP2_OP_SIZE; i++) {
+			 fprintf(stderr, "m_fc2_output[%d]: %d \n", i, m_fc2_output[i]);
+			 }*/
 
 			if (error_counter > 0) {
 				fprintf(stderr,
@@ -1956,20 +2157,15 @@ void zs_driverMonitor::dumpPixels(const char * fileName) {
 
 }
 
-#ifdef FPGA_MODE
-int zs_driverMonitor::runLoop()
-{
+int zs_driverMonitor::runLoop() {
 	zs_driverMonitor * zsDM = NULL;
 	zsDM = new zs_driverMonitor();
 	zsDM->readNetwork("./network_face");
 
-	//pthread_t m_readThread;
-	//pthread_create(&m_readThread,NULL,readThreadRoutine,(void *)&zsDM);
 	zsDM->launchThread();
 	unsigned long long n_clkCycles = 0;
 
-	while(1)
-	{
+	while (1) {
 		++n_clkCycles;
 		zsDM->processingLoop(n_clkCycles);
 
@@ -1978,76 +2174,16 @@ int zs_driverMonitor::runLoop()
 	return 1;
 
 }
-#else // ifdef FPGA_MODE
 
-extern "C" void zs_driver_monitor(t_output_sigs * output_sigs_sv,
-		t_input_sigs * input_sigs_sv) {
-	static zs_driverMonitor * odm = NULL;
-	static unsigned long long n_clkCycles = 0;
 
-	*input_sigs_sv = odm->inputSigsInternal;
-	input_sigs_sv->s_input_bus_valid = 0;
-
-	if (!odm) {
-		odm = new zs_driverMonitor();
-		odm->readNetwork("../sim/network_face");
-	}
-
-	odm->input_sigs = input_sigs_sv;
-	odm->output_sigs = output_sigs_sv;
-
-	if (n_clkCycles < 10)              //reset lasts for 9 clock cycles
-		input_sigs_sv->s_resetn = 0;
-	else if (n_clkCycles < 12) {
-		input_sigs_sv->s_resetn = 1;
-	} else {
-		odm->processingLoop(n_clkCycles);
-	}
-
-	odm->inputSigsInternal = *input_sigs_sv;
-
-	for (unsigned int i = 0; i < 8; ++i)
-		odm->m_compute_wfs[i].add(output_sigs_sv->mac_compute_debug_s[i],
-				n_clkCycles);
-
-	int writeKernel = 0;
-	int writePixel = 0;
-	int writeBias = 0;
-	int writeConfig = 0;
-	int readPixel = 0;
-
-	if (input_sigs_sv->s_input_bus_valid != 0) {
-		if (input_sigs_sv->s_input_bus_type == 3) //config
-			writeConfig = 1;
-		if (input_sigs_sv->s_input_bus_type == 2) //kernel
-			writeKernel = 1;
-		if (input_sigs_sv->s_input_bus_type == 1) //pixel
-			writePixel = 1;
-		if (input_sigs_sv->s_input_bus_type == 0) //bias
-			writeBias = 1;
-
-	}
-
-	if (output_sigs_sv->s_output_pixel_stream_valid != 0)
-		readPixel = 1;
-
-	odm->m_writeKernel_wf.add(writeKernel, n_clkCycles);
-	odm->m_writePixel_wf.add(writePixel, n_clkCycles);
-	odm->m_writeBias_wf.add(writeBias, n_clkCycles);
-	odm->m_writeConfig_wf.add(writeConfig, n_clkCycles);
-
-	odm->m_readPixel_wf.add(readPixel, n_clkCycles);
-	++n_clkCycles;
-
-}
-#endif  // else ifdef FPGA_MODE
 
 void * readThreadRoutine(void * arg) {
+
 	zs_driverMonitor *zsDM = ((zs_driverMonitor *) arg);
 	printf("read thread started\n");
 	/*For test*/
 	zsDM->m_readAxiFile = fopen("readAxiFile", "w");
-	//dma_set(virtual_address, S2MM_CONTROL_REGISTER, 0xf001);
+	//dma_set_(virtual_address_, S2MM_CONTROL_REGISTER_, 0xf001);
 	while (1) {
 		zsDM->readFromAxi();
 	}

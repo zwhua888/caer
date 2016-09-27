@@ -8,7 +8,16 @@
 #include <iostream>
 #include <bitset>
 #include <iomanip>
+#include <stdio.h>
+#include <termios.h>
+#include <time.h>
+#include <sys/mman.h>
+#include <stdbool.h>
+#include <math.h>
+#include <ncurses/curses.h>
 
+#include <sched.h>
+#include <thread>
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
@@ -18,9 +27,9 @@
 #include <pthread.h>
 #include "dirent.h"
 
-#ifdef FPGA_MODE
-#include "./axidmalib.h"
-#endif
+//#ifdef FPGA_MODE
+//#include "./axidmalib.h"
+//#endif
 #define Assert(a,b) do { if (!(a)) { printf ( "Assertion failed, file %s, line %d\n", __FILE__, __LINE__); printf ( "Assertion: " #a "\n"); printf ( "ERR: " b "\n"); } } while (0)
 #define NUM_MAC_BLOCKS 128
 #define PATCH_SLACK 512
@@ -41,6 +50,24 @@
 
 #define IP2_IP_SIZE 128
 #define IP2_OP_SIZE 2
+
+#define device_addr_offset_ 0x40400000
+#define dest_addr_offset_ 0x0F000000
+#define src_addr_offset_ 0x0E000000
+
+// Memory block AXI/DMA
+#define MM2S_CONTROL_REGISTER_ 0x00
+#define MM2S_STATUS_REGISTER_ 0x04
+#define MM2S_START_ADDRESS_ 0x18
+#define MM2S_LENGTH_ 0x28
+
+#define S2MM_CONTROL_REGISTER_ 0x30
+#define S2MM_STATUS_REGISTER_ 0x34
+#define S2MM_DESTINATION_ADDRESS_ 0x48
+#define S2MM_LENGTH_ 0x58
+
+#define TRANSLEN_ 8 //bytes multiple of 4
+#define BURST_ 10
 
 #ifdef __cplusplus
 extern "C" {
@@ -64,8 +91,8 @@ inline int max(unsigned int a, unsigned int b) {
 	return a > b ? a : b;
 }
 
-inline double fixedPointToDouble(int num, unsigned int numFracBits, int totalNumBits =
-		-1) {
+inline double fixedPointToDouble(int num, unsigned int numFracBits,
+		int totalNumBits = -1) {
 	if (totalNumBits > -1) {
 		Assert(totalNumBits >= (int )numFracBits,
 				"invalid arguments to fixedPointToDouble");
@@ -107,14 +134,13 @@ typedef struct {
 
 void * readThreadRoutine(void * arg);
 
-#ifdef __cplusplus
-}
-#endif
-
 class zs_driverMonitor {
 
-
 	unsigned int m_nFracBits;
+	int dha;
+	unsigned int* virtual_address_;
+	unsigned int* virtual_destination_address_;
+	unsigned int* virtual_source_address_;
 
 	// added struct for parameters of each layer (wrt FPGA tb).
 	typedef struct {
@@ -220,9 +246,7 @@ class zs_driverMonitor {
 	//FILE *m_readAxiFile;
 	FILE *m_readWordsAxiFile;
 
-	int *m_initConfig;
-	bool m_poolingEnabled, m_reluEnabled, m_encodingEnabled;
-	bool m_imageCompressionEnabled;
+	int *m_initConfig;bool m_poolingEnabled, m_reluEnabled, m_encodingEnabled;bool m_imageCompressionEnabled;
 	int instruction[2];
 	int old_row;
 	double m_imageScale;
@@ -236,8 +260,7 @@ class zs_driverMonitor {
 	int m_idp_mac_index[MAX_NUM_INPUT_PIXELS];
 
 	int m_mac_stripe_index[8];
-	unsigned int m_idp_decodePosition[8];
-	bool m_idp_positionConsideredOnce[8];
+	unsigned int m_idp_decodePosition[8];bool m_idp_positionConsideredOnce[8];
 
 	bool m_firstAxiWrite;
 
@@ -264,17 +287,13 @@ class zs_driverMonitor {
 	unsigned int error_on_SMs;
 
 	int m_outputLayerPadding;
-	int m_inputLayerPadding;
-	bool m_activeProcessing;
-	bool m_sent_start_pulse;
-	bool m_sent_image_ready;
+	int m_inputLayerPadding;bool m_activeProcessing;bool m_sent_start_pulse;bool m_sent_image_ready;
 
 	char m_baseFileName[100];
 
 	int generatedSM;
 	int SMpixels[16];
-	unsigned int tempPos;
-	bool bottomRow;
+	unsigned int tempPos;bool bottomRow;
 	unsigned int shift;
 	unsigned int chIdx, xPos, yPos;
 	int outputGroundTruthPixel;
@@ -286,7 +305,6 @@ class zs_driverMonitor {
 	int m_fc2_output[IP2_OP_SIZE];
 
 public:
-
 
 	t_input_sigs inputSigsInternal;
 	FILE *m_readAxiFile;
@@ -336,14 +354,12 @@ public:
 		m_layerParams = NULL;
 		m_currentInputPass = 0;
 
-#ifdef FPGA_MODE
-		initAxiMemoryPointers();
-		resetAXIDMA();
+		//initAxiMemoryPointers();
+		//resetAXIDMA();
 		input_sigs = new t_input_sigs;
 		output_sigs = new t_output_sigs;
-		memset(input_sigs,0,sizeof(t_input_sigs));
-		memset((void *)output_sigs,0,sizeof(t_output_sigs));
-#endif
+		memset(input_sigs, 0, sizeof(t_input_sigs));
+		memset((void *) output_sigs, 0, sizeof(t_output_sigs));
 
 		m_activeProcessing = false;
 		m_nFracBits = 8;
@@ -365,6 +381,16 @@ public:
 		m_initConfig = new int[(int) (config_last)];
 
 		loadFCParams();
+
+		dha = open("/dev/mem", O_RDWR | O_SYNC); // Open /dev/mem which represents the whole physical memory
+		virtual_address_ = (unsigned int *) mmap(NULL, 65535,
+				PROT_READ | PROT_WRITE, MAP_SHARED, dha, device_addr_offset_); // Memory map AXI Lite register block
+		virtual_destination_address_ = (unsigned int *) mmap(NULL, 65535,
+				PROT_READ | PROT_WRITE, MAP_SHARED, dha, dest_addr_offset_); // Memory map destination address
+		virtual_source_address_ = (unsigned int *) mmap(NULL, 65535,
+				PROT_READ | PROT_WRITE, MAP_SHARED, dha, src_addr_offset_); // Memory map source address
+
+
 	}
 
 	void launchThread();
@@ -381,13 +407,32 @@ public:
 	void initializeKernelArray(t_layerParams & layerParam);
 	void initializeConfigArray();
 
+	//void initAxiMemory();
+	unsigned int dma_set_(unsigned int* dma_virtual_address, int offset,
+			unsigned int value);
+	unsigned int dma_get_(unsigned int* dma_virtual_address, int offset);
+	void resetAxiBus();
+	bool waitValidAxiDataToRead_(int wordsNumber);
+	void initNet();
+
+	int dma_mm2s_sync_(unsigned int* dma_virtual_address);
+	int dma_s2mm_sync_(unsigned int* dma_virtual_address);
+	void dma_s2mm_status_(unsigned int* dma_virtual_address);
+	void dma_mm2s_status_(unsigned int* dma_virtual_address);
+	void memdump_(char* virtual_address, int byte_count);
+	void hexDump_(char *desc, void *addr, int len);
+
+	int writeAxiCommit_(int wordsNumber, unsigned int startPos);
+	int dma_s2mm_sync_halted_and_notIDLE_(unsigned int* dma_virtual_address);
+	void stopS2MM_(void);
+	void memdump_checking_(char* virtual_address, int byte_count);
+
 	~zs_driverMonitor() {
 	}
 
 	int getGroundTruthPixel(unsigned int outputChannel, int xPos, int yPos,
 			int & fullResResult, bool debug = false);
-	void sendConfigData(CONFIG_TYPE config_type, int data);
-	bool initializationLoop();
+	void sendConfigData(CONFIG_TYPE config_type, int data);bool initializationLoop();
 	void writeBiasValue(int biasValue, int biasAddress);
 	void writeKernelValue(int kernelValue[2], int validMask);
 	void writePixels(int pos0, int pos1, bool pos1_valid, int instruction[2]);
@@ -395,9 +440,8 @@ public:
 	void writeToAxi();
 	void axiWriteCommit();
 	unsigned int reverseInt(unsigned int src);
-	void readFromAxi();
-	bool matchToPatch(int output_pixel, int pixel_ch, int pixel_xpos,
-			int pixel_ypos, unsigned int mac_index);
+	void readFromAxi();bool matchToPatch(int output_pixel, int pixel_ch,
+			int pixel_xpos, int pixel_ypos, unsigned int mac_index);
 	void generateSMandPixels(unsigned int outputHeight,
 			unsigned int outputWidth);
 	void phase1_step();
@@ -408,16 +452,20 @@ public:
 	void processingLoop(unsigned int currentStep);
 	void dumpKernels();
 	void dumpPixels(const char * fileName);
-#ifdef FPGA_MODE
 	int runLoop(void);
-#endif
 
 	void file_set(char * i, double *b, double thr);
 	char * file_get();
 
+
 private:
 	char * file_i;
 
+
 };
 
+#endif
+
+#ifdef __cplusplus
+}
 #endif

@@ -17,6 +17,10 @@ void zs_driverMonitor_file_set(zs_driverMonitor* v, char * i, double *b, double 
 
 char * zs_driverMonitor_file_get(zs_driverMonitor* v);
 
+void zs_driverMonitor_initNet(zs_driverMonitor* v);
+
+void zs_driverMonitor_resetAxiBus(zs_driverMonitor* v);
+
 void deleteMyClass(zs_driverMonitor* v);
 
 void loadFCParams(zs_driverMonitor* v);

@@ -72,6 +72,8 @@ inline void resetAXIDMA(){
 
 inline int writeAxiCommit(int wordsNumber,unsigned int startPos){
 
+	printf("%p \n", (void*)virtual_address);
+
 	int numbytes = 0;	
 
 	if(wordsNumber > 0 || wordsNumber <= 64){
