@@ -69,9 +69,7 @@
 #define TRANSLEN_ 8 //bytes multiple of 4
 #define BURST_ 10
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+
 
 inline int truncateInt(int num, int numBits) {
 	int result;
@@ -80,15 +78,15 @@ inline int truncateInt(int num, int numBits) {
 	result =
 			(result >= (1 << (numBits - 1)) ?
 					((1 << (numBits - 1)) - 1) : result);
-	return result;
+	return(result);
 }
 
 inline int min(unsigned int a, unsigned int b) {
-	return a < b ? a : b;
+	return(a < b ? a : b);
 }
 
 inline int max(unsigned int a, unsigned int b) {
-	return a > b ? a : b;
+	return(a > b ? a : b);
 }
 
 inline double fixedPointToDouble(int num, unsigned int numFracBits,
@@ -133,6 +131,10 @@ typedef struct {
 } t_output_sigs;
 
 void * readThreadRoutine(void * arg);
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 class zs_driverMonitor {
 
@@ -268,7 +270,7 @@ class zs_driverMonitor {
 
 	pthread_t m_readThread;
 
-	int dh;
+	//int dh;
 	off_t offset_control, offset_read, offset_write;
 	unsigned int current_control, current_read, current_write;
 	int s2mm_wait_counter;
@@ -384,12 +386,11 @@ public:
 
 		dha = open("/dev/mem", O_RDWR | O_SYNC); // Open /dev/mem which represents the whole physical memory
 		virtual_address_ = (unsigned int *) mmap(NULL, 65535,
-				PROT_READ | PROT_WRITE, MAP_SHARED, dha, device_addr_offset_); // Memory map AXI Lite register block
+		PROT_READ | PROT_WRITE, MAP_SHARED, dha, device_addr_offset_); // Memory map AXI Lite register block
 		virtual_destination_address_ = (unsigned int *) mmap(NULL, 65535,
-				PROT_READ | PROT_WRITE, MAP_SHARED, dha, dest_addr_offset_); // Memory map destination address
+		PROT_READ | PROT_WRITE, MAP_SHARED, dha, dest_addr_offset_); // Memory map destination address
 		virtual_source_address_ = (unsigned int *) mmap(NULL, 65535,
-				PROT_READ | PROT_WRITE, MAP_SHARED, dha, src_addr_offset_); // Memory map source address
-
+		PROT_READ | PROT_WRITE, MAP_SHARED, dha, src_addr_offset_); // Memory map source address
 
 	}
 
@@ -408,22 +409,21 @@ public:
 	void initializeConfigArray();
 
 	//void initAxiMemory();
-	unsigned int dma_set_(unsigned int* dma_virtual_address, int offset,
+	void dma_set_(unsigned int* dma_virtual_address, int offset,
 			unsigned int value);
-	unsigned int dma_get_(unsigned int* dma_virtual_address, int offset);
-	void resetAxiBus();
-	bool waitValidAxiDataToRead_(int wordsNumber);
+	unsigned int  dma_get_(unsigned int* dma_virtual_address, int offset);
+	void resetAxiBus();bool waitValidAxiDataToRead_(int wordsNumber);
 	void initNet();
 
-	int dma_mm2s_sync_(unsigned int* dma_virtual_address);
-	int dma_s2mm_sync_(unsigned int* dma_virtual_address);
+	void dma_mm2s_sync_(unsigned int* dma_virtual_address);
+	void dma_s2mm_sync_(unsigned int* dma_virtual_address);
 	void dma_s2mm_status_(unsigned int* dma_virtual_address);
 	void dma_mm2s_status_(unsigned int* dma_virtual_address);
 	void memdump_(char* virtual_address, int byte_count);
 	void hexDump_(char *desc, void *addr, int len);
 
 	int writeAxiCommit_(int wordsNumber, unsigned int startPos);
-	int dma_s2mm_sync_halted_and_notIDLE_(unsigned int* dma_virtual_address);
+	void dma_s2mm_sync_halted_and_notIDLE_(unsigned int* dma_virtual_address);
 	void stopS2MM_(void);
 	void memdump_checking_(char* virtual_address, int byte_count);
 
@@ -454,13 +454,11 @@ public:
 	void dumpPixels(const char * fileName);
 	int runLoop(void);
 
-	void file_set(char * i, double *b, double thr);
+	void file_set();
 	char * file_get();
-
 
 private:
 	char * file_i;
-
 
 };
 

@@ -275,9 +275,6 @@ static bool mainloop_1(void) {
 	// for example, we now classify the latest image
 	// only run CNN if we have a file to classify
 
-	// create image describing network activity
-	caerFrameEventPacket networkActivity = NULL;
-
 	if(*file_strings_classify != NULL) {
 		caerNullHopWrapper(23, file_strings_classify, classification_results, (int) MAX_IMG_QTY, NULL);
 	}
