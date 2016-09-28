@@ -69,7 +69,7 @@
 #define TRANSLEN_ 8 //bytes multiple of 4
 #define BURST_ 10
 
-
+#define FINISHED 3 // at the end of the processing
 
 inline int truncateInt(int num, int numBits) {
 	int result;
@@ -78,15 +78,15 @@ inline int truncateInt(int num, int numBits) {
 	result =
 			(result >= (1 << (numBits - 1)) ?
 					((1 << (numBits - 1)) - 1) : result);
-	return(result);
+	return (result);
 }
 
 inline int min(unsigned int a, unsigned int b) {
-	return(a < b ? a : b);
+	return (a < b ? a : b);
 }
 
 inline int max(unsigned int a, unsigned int b) {
-	return(a > b ? a : b);
+	return (a > b ? a : b);
 }
 
 inline double fixedPointToDouble(int num, unsigned int numFracBits,
@@ -356,8 +356,6 @@ public:
 		m_layerParams = NULL;
 		m_currentInputPass = 0;
 
-		//initAxiMemoryPointers();
-		//resetAXIDMA();
 		input_sigs = new t_input_sigs;
 		output_sigs = new t_output_sigs;
 		memset(input_sigs, 0, sizeof(t_input_sigs));
@@ -382,8 +380,6 @@ public:
 
 		m_initConfig = new int[(int) (config_last)];
 
-		loadFCParams();
-
 		dha = open("/dev/mem", O_RDWR | O_SYNC); // Open /dev/mem which represents the whole physical memory
 		virtual_address_ = (unsigned int *) mmap(NULL, 65535,
 		PROT_READ | PROT_WRITE, MAP_SHARED, dha, device_addr_offset_); // Memory map AXI Lite register block
@@ -395,7 +391,7 @@ public:
 	}
 
 	void launchThread();
-	void setCurrentLayer(unsigned int layerIndex);
+	int setCurrentLayer(unsigned int layerIndex);
 	void readNetwork(const char *fileName);
 	void checkMarker(FILE *fp, const char * marker);
 	void readLayer(FILE *fp, t_layerParams &layerParam, bool firstLayer);
@@ -411,7 +407,7 @@ public:
 	//void initAxiMemory();
 	void dma_set_(unsigned int* dma_virtual_address, int offset,
 			unsigned int value);
-	unsigned int  dma_get_(unsigned int* dma_virtual_address, int offset);
+	unsigned int dma_get_(unsigned int* dma_virtual_address, int offset);
 	void resetAxiBus();bool waitValidAxiDataToRead_(int wordsNumber);
 	void initNet();
 
@@ -449,7 +445,7 @@ public:
 	void dumpImage();
 	void dumpWaveforms(unsigned int currentStep);
 	double getSparsity();
-	void processingLoop(unsigned int currentStep);
+	int processingLoop(unsigned int currentStep);
 	void dumpKernels();
 	void dumpPixels(const char * fileName);
 	int runLoop(void);
