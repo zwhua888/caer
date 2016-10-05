@@ -84,7 +84,6 @@ static void caerNullHopWrapperRun(caerModuleData moduleData, size_t argsNumber,
 	//zs_driverMonitor_loadImage(state->cpp_class);
 	CAER_FRAME_ITERATOR_ALL_START(imagestreamer_hists)
 
-		printf("inside %d\n", caerFrameEventGetTSStartOfFrame(caerFrameIteratorElement));
 
 		zs_driverMonitor_threadExists(state->cpp_class);
 
@@ -92,7 +91,6 @@ static void caerNullHopWrapperRun(caerModuleData moduleData, size_t argsNumber,
 
 		zs_driverMonitor_file_set(state->cpp_class, picture);
 
-		printf("outside %d\n", caerFrameEventGetTSStartOfFrame(caerFrameIteratorElement));
 	CAER_FRAME_ITERATOR_ALL_END
 	return;
 }

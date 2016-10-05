@@ -6,9 +6,6 @@
 
 int zs_driverMonitor::file_set(uint8_t * picture) {
 
-	//printf("image write pos %d\n", m_imageWritePos);
-	//launchThread();
-	//sem_init(&signal_done, 0, 1);
 
 	int counter = 0;
 	for (unsigned int i = 0; i < 1; ++i) {
@@ -81,8 +78,18 @@ void zs_driverMonitor::waitValidAxiDataToRead_(int wordsNumber) {
 void zs_driverMonitor::dma_mm2s_sync_(unsigned int* dma_virtual_address) {
 	unsigned int mm2s_status = dma_get_(dma_virtual_address,
 	MM2S_STATUS_REGISTER_);
+	int counter = 0;
 	while (!(mm2s_status & 1 << 12) || !(mm2s_status & 1 << 1)) {
 		mm2s_status = dma_get_(dma_virtual_address, MM2S_STATUS_REGISTER_);
+		counter +=1;
+		if(counter > 1000000){
+			//printf("################# write axi stuck RESETTTT\n");
+			m_completedImageWrite = true;
+			m_completedKernelWrite = true;
+			m_completedConfigWrite = true;
+			m_completedBiasWrite = true;
+			break;
+		}
 	}
 }
 
@@ -90,8 +97,15 @@ void zs_driverMonitor::dma_s2mm_sync_(unsigned int* dma_virtual_address) {
 	unsigned int s2mm_status = dma_get_(dma_virtual_address,
 	S2MM_STATUS_REGISTER_);
 
+	int counter = 0;
 	while (!(s2mm_status & (1 << 12)) || !(s2mm_status & (1 << 1))) {
 		s2mm_status = dma_get_(dma_virtual_address, S2MM_STATUS_REGISTER_);
+		//printf("s2mm_status\n");
+		counter +=1;
+		if(counter > 1000000){
+			//printf("################# read axi stuck RESETTTT\n");
+			m_gotAllPixels = true; break;
+		}
 	}
 }
 
@@ -1045,7 +1059,7 @@ void zs_driverMonitor::readFromAxi() {
 				&& output_sigs->s_output_pixel_stream_valid == 0
 				&& m_currentLayer == m_numLayers) {
 
-			//stopS2MM_();
+			stopS2MM_();
 			//pthread_exit(NULL); // finito
 		}
 		pixel_step(); // get pixels and decode
@@ -1292,11 +1306,11 @@ void zs_driverMonitor::phase2_step() {
 				memset(instruction, 0, 2 * sizeof(int));
 
 				m_pixelArrayWritePos += 2;
-				if (done && m_pixelArrayWritePos == m_nPixelsArray)
+				if (done && (m_pixelArrayWritePos == m_nPixelsArray))
 					m_completedImageWrite = true;
 			}
 
-			else if (m_pixelArrayWritePos == m_nPixelsArray - 1 && done) {
+			else if ((m_pixelArrayWritePos == (m_nPixelsArray - 1))&& done) {
 				writePixels(m_pixelArray[m_pixelArrayWritePos], 0, false,
 						instruction);
 				memset(instruction, 0, 2 * sizeof(int));
@@ -1391,9 +1405,6 @@ void zs_driverMonitor::phase2_step() {
 int zs_driverMonitor::threadExists(){
 	if(pthread_kill(m_readThread, 0) != 0){
 		launchThread();
-		printf("thread launched again\n");
-	}else{
-		printf("thread is there\n");
 	}
 }
 
@@ -1406,6 +1417,8 @@ int zs_driverMonitor::processingLoop(unsigned int currentStep) {
 	}
 
 	if (!m_activeProcessing) {
+		//printf("changing layer\n");
+
 		if (m_currentLayer != 0) {
 			start = end;
 		}
@@ -1417,11 +1430,15 @@ int zs_driverMonitor::processingLoop(unsigned int currentStep) {
 		if (setCurrentLayer(m_currentLayer) == FINISHED) {
 			return (FINISHED);
 		}
+
 		setInternalVariables();
 		initializeConfigArray();
+
 	}
 
+
 	phase2_step();
+
 
 	m_activeProcessing = true;
 
@@ -1453,16 +1470,14 @@ int zs_driverMonitor::processingLoop(unsigned int currentStep) {
 
 void zs_driverMonitor::printStatus() {
 
-	if (error_counter > 0) {
-		fprintf(stderr, "\n  +++   total error count is: %d \n", error_counter);
-	}
 
 	printf("######################################\n");
 
-	printf("TIME FOR LAYER 1 NULLHOP: %ld ms\n", time_for_eval_layer[0]);
-	printf("TIME FOR LAYER 2 NULLHOP: %ld ms\n", time_for_eval_layer[1]);
+	for(int h=0; h <  m_numLayers; h++){
+		printf("TIME FOR LAYER %d NULLHOP: %ld ms\n", h,time_for_eval_layer[h]);
+	}
+
 	printf("TIME FOR FC on armv7 : %ld ms\n", time_for_eval_fc);
-	printf("TIME FOR ALL %ld ms\n", time_for_all);
 
 	fprintf(stderr, "\n *** \n Second FC layer output: \n");
 	for (unsigned int i = 0; i < IP2_OP_SIZE; i++) {
@@ -1477,8 +1492,12 @@ void * readThreadRoutine(void * arg) {
 
 	zs_driverMonitor *zsDM = ((zs_driverMonitor *) arg);
 	while (1) {
+		try{
 		zsDM->readFromAxi();
 		usleep(5);
+		}catch(const char *p){
+			std::cout<< "caught" << p << "\n";
+		}
 	}
 
 }
