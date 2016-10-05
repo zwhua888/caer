@@ -10,12 +10,20 @@ zs_driverMonitor* newzs_driverMonitor() {
 	return new zs_driverMonitor();
 }
 
-void zs_driverMonitor_file_set(zs_driverMonitor* v) {
-	v->file_set();
+int zs_driverMonitor_loadImage(zs_driverMonitor* v){
+	return v->loadImage();
 }
 
-char * zs_driverMonitor_file_get(zs_driverMonitor* v) {
-	return v->file_get();
+int zs_driverMonitor_threadExists(zs_driverMonitor* v){
+	return v->threadExists();
+}
+
+int zs_driverMonitor_launchThread(zs_driverMonitor* v){
+	return v->launchThread();
+}
+
+void zs_driverMonitor_file_set(zs_driverMonitor* v, uint8_t * picture) {
+	v->file_set(picture);
 }
 
 void zs_driverMonitor_initNet(zs_driverMonitor* v) {
@@ -29,6 +37,11 @@ void zs_driverMonitor_resetAxiBus(zs_driverMonitor* v) {
 void deleteMyClass(zs_driverMonitor* v) {
 	delete v;
 }
+
+void zs_driverMonitor_closeThread(zs_driverMonitor* v){
+	return v->closeThread();
+}
+
 
 void loadFCParams(zs_driverMonitor* v) {
 	return v->loadFCParams();

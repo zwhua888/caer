@@ -2,28 +2,52 @@
  *  Author: federico.corradi@inilabs.com
  */
 #include "classify.hpp"
+#include <fstream>
+
+int zs_driverMonitor::file_set(uint8_t * picture) {
+
+	//printf("image write pos %d\n", m_imageWritePos);
+	//launchThread();
+	//sem_init(&signal_done, 0, 1);
+
+	int counter = 0;
+	for (unsigned int i = 0; i < 1; ++i) {
+		for (unsigned int j = 0; j < 36; ++j) {
+			for (unsigned int k = 0; k < 36; ++k) {
+				this->m_layerParams[0].image[i][j][k] = picture[counter] * 32;
+				counter += 1;
+			}
+		}
+	}
+	m_image = this->m_layerParams[0].image;
+
+	this->n_clkCycles = 0;
+	while (1) {
+		if (this->processingLoop(this->n_clkCycles) == FINISHED) {
+
+			this->n_clkCycles = 0;
+			this->m_activeProcessing = false;
+			this->m_currentLayer = 0;
+
+			break;
+		}
+	}
+
+	//sem_wait(&signal_done);
+	this->printStatus();
+
+	return (0);
+}
+
+void zs_driverMonitor::setTotalTime(double timer) {
+	this->time_for_all = timer;
+}
 
 void zs_driverMonitor::initNet() {
 
 	resetAxiBus();
-	readNetwork("/home/root/network_face"); // load network file
 	loadFCParams(); // load fully connected weights
-	//initializeInternalVariables();
-	//launchThread();
 
-}
-
-void zs_driverMonitor::file_set() {
-
-	/* re initialize all variable*/
-	//loadFCParams();
-	launchThread();
-	m_activeProcessing = false;
-	m_currentLayer = 0;
-
-	runLoop();
-	printf("ended processing\n");
-	return;
 }
 
 void zs_driverMonitor::dma_set_(unsigned int* dma_virtual_address, int offset,
@@ -43,14 +67,15 @@ void zs_driverMonitor::resetAxiBus() {
 	dma_set_(virtual_address_, MM2S_CONTROL_REGISTER_, 0);
 }
 
-bool zs_driverMonitor::waitValidAxiDataToRead_(int wordsNumber) {
+void zs_driverMonitor::waitValidAxiDataToRead_(int wordsNumber) {
 
 	dma_set_(virtual_address_, S2MM_STATUS_REGISTER_, 2); // Clear idle
 	dma_set_(virtual_address_, S2MM_STATUS_REGISTER_, 0x1000); // Clear IOC_Irq
 	dma_set_(virtual_address_, S2MM_DESTINATION_ADDRESS_, dest_addr_offset_);
-	dma_set_(virtual_address_, S2MM_CONTROL_REGISTER_, 0xf001);
+	dma_set_(virtual_address_, S2MM_CONTROL_REGISTER_, 0x0001); //0xf001
 	dma_set_(virtual_address_, S2MM_LENGTH_, TRANSLEN_ * wordsNumber);
 	dma_s2mm_sync_(virtual_address_); // Wait until Idle or IOC_Irq bit is 1
+
 }
 
 void zs_driverMonitor::dma_mm2s_sync_(unsigned int* dma_virtual_address) {
@@ -80,70 +105,118 @@ void zs_driverMonitor::dma_s2mm_sync_halted_and_notIDLE_(
 	}
 }
 
-void zs_driverMonitor::dma_s2mm_status_(unsigned int* dma_virtual_address) {
+int zs_driverMonitor::dma_s2mm_status_(unsigned int* dma_virtual_address) {
 	unsigned int status = dma_get_(dma_virtual_address, S2MM_STATUS_REGISTER_);
 	printf("Stream to memory-mapped status (0x%08x@0x%02x):", status,
 	S2MM_STATUS_REGISTER_);
-	if (status & 0x00000001)
-		printf(" halted");
-	else
-		printf(" running");
-	if (status & 0x00000002)
-		printf(" idle");
-	if (status & 0x00000008)
-		printf(" SGIncld");
-	if (status & 0x00000010)
-		printf(" DMAIntErr");
-	if (status & 0x00000020)
-		printf(" DMASlvErr");
-	if (status & 0x00000040)
-		printf(" DMADecErr");
-	if (status & 0x00000100)
-		printf(" SGIntErr");
-	if (status & 0x00000200)
-		printf(" SGSlvErr");
-	if (status & 0x00000400)
-		printf(" SGDecErr");
-	if (status & 0x00001000)
-		printf(" IOC_Irq");
-	if (status & 0x00002000)
-		printf(" Dly_Irq");
-	if (status & 0x00004000)
-		printf(" Err_Irq");
-	printf("\n");
+	if (status & 0x00000001) {
+		printf(" halted\n");
+		return (0);
+	} else {
+		printf(" running\n");
+		return (1);
+	}
+	if (status & 0x00000002) {
+		printf(" idle\n");
+		return (1);
+	}
+	if (status & 0x00000008) {
+		printf(" SGIncld\n");
+		return (1);
+	}
+	if (status & 0x00000010) {
+		printf(" DMAIntErr\n");
+		return (1);
+	}
+	if (status & 0x00000020) {
+		printf(" DMASlvErr\n");
+		return (1);
+	}
+	if (status & 0x00000040) {
+		printf(" DMADecErr\n");
+		return (1);
+	}
+	if (status & 0x00000100) {
+		printf(" SGIntErr\n");
+		return (1);
+	}
+	if (status & 0x00000200) {
+		printf(" SGSlvErr\n");
+		return (1);
+	}
+	if (status & 0x00000400) {
+		printf(" SGDecErr\n");
+		return (1);
+	}
+	if (status & 0x00001000) {
+		printf(" IOC_Irq\n");
+		return (1);
+	}
+	if (status & 0x00002000) {
+		printf(" Dly_Irq\n");
+		return (1);
+	}
+	if (status & 0x00004000) {
+		printf(" Err_Irq\n");
+		return (1);
+	}
 }
 
-void zs_driverMonitor::dma_mm2s_status_(unsigned int* dma_virtual_address) {
+int zs_driverMonitor::dma_mm2s_status_(unsigned int* dma_virtual_address) {
 	unsigned int status = dma_get_(dma_virtual_address, MM2S_STATUS_REGISTER_);
 	printf("Memory-mapped to stream status (0x%08x@0x%02x):", status,
 	MM2S_STATUS_REGISTER_);
-	if (status & 0x00000001)
-		printf(" halted");
-	else
-		printf(" running");
-	if (status & 0x00000002)
-		printf(" idle");
-	if (status & 0x00000008)
-		printf(" SGIncld");
-	if (status & 0x00000010)
-		printf(" DMAIntErr");
-	if (status & 0x00000020)
-		printf(" DMASlvErr");
-	if (status & 0x00000040)
-		printf(" DMADecErr");
-	if (status & 0x00000100)
-		printf(" SGIntErr");
-	if (status & 0x00000200)
-		printf(" SGSlvErr");
-	if (status & 0x00000400)
-		printf(" SGDecErr");
-	if (status & 0x00001000)
-		printf(" IOC_Irq");
-	if (status & 0x00002000)
-		printf(" Dly_Irq");
-	if (status & 0x00004000)
-		printf(" Err_Irq");
-	printf("\n");
+	if (status & 0x00000001) {
+		printf(" halted\n");
+		return (0);
+	} else {
+		printf(" running\n");
+		return (1);
+	}
+	if (status & 0x00000002) {
+		printf(" idle\n");
+		return (1);
+	}
+	if (status & 0x00000008) {
+		printf(" SGIncld\n");
+		return (1);
+	}
+	if (status & 0x00000010) {
+		printf(" DMAIntErr\n");
+		return (1);
+	}
+	if (status & 0x00000020) {
+		printf(" DMASlvErr\n");
+		return (1);
+	}
+	if (status & 0x00000040) {
+		printf(" DMADecErr\n");
+		return (1);
+	}
+	if (status & 0x00000100) {
+		printf(" SGIntErr\n");
+		return (1);
+	}
+	if (status & 0x00000200) {
+		printf(" SGSlvErr\n");
+		return (1);
+	}
+	if (status & 0x00000400) {
+		printf(" SGDecErr\n");
+		return (1);
+	}
+	if (status & 0x00001000) {
+		printf(" IOC_Irq\n");
+		return (1);
+	}
+	if (status & 0x00002000) {
+		printf(" Dly_Irq\n");
+		return (1);
+	}
+	if (status & 0x00004000) {
+		printf(" Err_Irq\n");
+		return (1);
+	}
 }
 
 void zs_driverMonitor::memdump_(char* virtual_address, int byte_count) {
@@ -180,7 +253,6 @@ void zs_driverMonitor::memdump_checking_(char* virtual_address,
 		if (offset % 8 == 7) {
 			printf("0x%08x%08x\n", data, data_low);
 			if (data != 3 || data_low != data_low_bkp) {
-				//resetAxiBus();
 				printf(
 						"Error in the sequence. is expected: high --> 00000003, low --> %d. Received: high --> %d, low --> %d",
 						data_low_bkp, data, data_low);
@@ -200,26 +272,42 @@ void zs_driverMonitor::memdump_checking_(char* virtual_address,
 	}
 }
 
-char * zs_driverMonitor::file_get() {
-	return (file_i);
+int zs_driverMonitor::launchThread() {
+
+	// high priority thread
+	pthread_attr_t attr;
+	struct sched_param param;
+
+	pthread_attr_init(&attr);
+	pthread_attr_getschedparam(&attr, &param);
+	(param.sched_priority)++;
+	pthread_attr_setschedparam(&attr, &param);
+
+	int err = -1;
+	int counter = 0;
+	while (err != 0) {
+		err = pthread_create(&m_readThread, &attr, readThreadRoutine,
+				(void *) this);
+		if (err != 0) {
+			printf("+++++ ERROR : while creating read thread.. exiting %d\n",
+					err);
+		}
+		counter += 1;
+		if (counter > 10) {
+			return (-1);
+		}
+	}
+	this->threadRunning = true;
+	return (0);
+
 }
 
-void zs_driverMonitor::launchThread() {
+int zs_driverMonitor::loadImage() {
 
-	// high priority
-	/*	pthread_attr_t attr;
-	 struct sched_param param;
-
-	 pthread_attr_init(&attr);
-	 pthread_attr_getschedparam(&attr, &param);
-	 (param.sched_priority)++;
-	 pthread_attr_setschedparam(&attr, &param); &attr*/
-
-	if (pthread_create(&m_readThread, NULL, readThreadRoutine, (void *) this)
-			!= 0) {
-		printf("+++++ ERROR : while creating read thread.. exiting\n");
-		exit(1);
-	}
+	return (1);
+}
+void zs_driverMonitor::closeThread() {
+	pthread_join(m_readThread, NULL);
 }
 
 void zs_driverMonitor::loadFCParams() {
@@ -228,10 +316,6 @@ void zs_driverMonitor::loadFCParams() {
 	load_single_FC_layer("ip2_params", m_ip2_params,
 			sizeof(m_ip2_params) / sizeof(m_ip2_params[0]));
 
-	dumpFCLayer("ip1_params_dumped", m_ip1_params,
-			sizeof(m_ip1_params) / sizeof(m_ip1_params[0]));
-	dumpFCLayer("ip2_params_dumped", m_ip2_params,
-			sizeof(m_ip2_params) / sizeof(m_ip2_params[0]));
 }
 
 void zs_driverMonitor::load_single_FC_layer(const char *fileName,
@@ -243,14 +327,29 @@ void zs_driverMonitor::load_single_FC_layer(const char *fileName,
 }
 
 void zs_driverMonitor::evaluateFCLayers() {
+	unsigned int idx_tot_fc1=0;
+	int max_height = (m_hinMax-m_hk+1);
+
+	if(m_poolingEnabled){
+		max_height/=2;
+	}
+	int max_width = (m_imageWidth-m_wk+1);
+	if(m_poolingEnabled){
+		max_width/=2;
+	}
+
+	/*int m_nchOuta = m_nchOut;
+	int max_widtha = max_width;
+	int max_heighta = max_height;*/
 	for (int i = 0; i < IP1_OP_SIZE; ++i) {
 		m_fc1_output[i] = 0;
-		for (int j = 0; j < m_nchIn; ++j) {
-			for (int k = 0; k < m_hinMax; ++k) {
-				for (int l = 0; l < m_imageWidth; ++l) {
-					m_fc1_output[i] += m_ip1_params[i * m_nchIn * m_hinMax
-							* m_imageWidth + j * m_hinMax * m_imageWidth
-							+ k * m_imageWidth + l] * m_image[j][k][l];
+		for (int j = 0; j < m_nchOut; ++j) { //m_nchIn; ++j) { // m_nchOut
+			for (int k = 0; k < max_width; ++k) {//m_hinMax; ++k) { //max_width
+				for (int l = 0; l < max_height; ++l) {//m_imageWidth //max_height
+					m_fc1_output[i] += m_ip1_params[idx_tot_fc1] * m_image[j][k][l];
+					//printf("m_nchIn %d m_hinMax %d m_imageWidth %d, m_poolingEnabled %d \n", m_nchOut, max_width, max_height, m_poolingEnabled);
+					//printf(" m_ip1_params[%d] %d\n",idx_tot_fc1, m_ip1_params[idx_tot_fc1]);
+					idx_tot_fc1++;
 				}
 
 			}
@@ -259,32 +358,26 @@ void zs_driverMonitor::evaluateFCLayers() {
 				+ m_ip1_params[m_nchIn * m_hinMax * m_imageWidth * IP1_OP_SIZE
 						+ i];
 		m_fc1_output[i] = m_fc1_output[i] > 0 ? m_fc1_output[i] : 0;
+		if(i==IP1_OP_SIZE-1){
+			printf(" m_fc1_output[%d] %d\n", i, m_fc1_output[i]);
+		}
 	}
-
-	/*dumpFCLayer("fc1_out", m_fc1_output,
-	 sizeof(m_fc1_output) / sizeof(m_fc1_output[0]));*/
 
 	for (int i = 0; i < IP2_OP_SIZE; ++i) {
 		m_fc2_output[i] = 0;
-		for (int j = 0; j < IP1_OP_SIZE; ++j)
+		for (int j = 0; j < IP1_OP_SIZE; ++j){
 			m_fc2_output[i] += m_ip2_params[i * IP1_OP_SIZE + j]
 					* m_fc1_output[j];
+			//printf("m_ip2_params[%d * %d + %d] %d\n", i, IP1_OP_SIZE, j,  m_ip2_params[i * IP1_OP_SIZE + j]);
+		}
 
 		m_fc2_output[i] = (m_fc2_output[i] / 256)
 				+ m_ip2_params[IP2_OP_SIZE * IP1_OP_SIZE + i];
+		//if(i==IP2_OP_SIZE-1){
+			printf(" m_fc2_output[%d] %d\n", i, m_fc2_output[i]);
+		//}
 	}
 
-	/*dumpFCLayer("fc2_out", m_fc2_output,
-	 sizeof(m_fc2_output) / sizeof(m_fc2_output[0]));*/
-
-}
-
-void zs_driverMonitor::dumpFCLayer(const char *fileName, int *fc,
-		unsigned int len) {
-	FILE *fp = fopen(fileName, "w");
-	for (unsigned int i = 0; i < len; ++i)
-		fprintf(fp, "%d\n", fc[i]);
-	fclose(fp);
 }
 
 int zs_driverMonitor::ipow(int base, int exp) {
@@ -300,8 +393,6 @@ int zs_driverMonitor::ipow(int base, int exp) {
 
 int zs_driverMonitor::setCurrentLayer(unsigned int layerIndex) {
 	if (layerIndex >= m_numLayers) {
-		fprintf(stderr, "TB FINISHED. Layer %d is beyond layer number %d\n",
-				layerIndex, m_numLayers);
 		return (FINISHED);
 	}
 	m_imageWidth = m_layerParams[layerIndex].num_input_column;
@@ -374,20 +465,12 @@ int zs_driverMonitor::setCurrentLayer(unsigned int layerIndex) {
 		m_channel_decode_jump_mask = (m_contiguous_kernels / (m_wk * m_hk)) - 1;
 	}
 
-	fprintf(stderr,
-			"num dummy kernels %d, pseudo input channel number %d, num input passes %d, output channel offset %d\n",
-			m_dummyKernels, m_nchIn_pseudo, m_numInputPasses,
-			m_outputChannelOffset);
 	m_macs_per_channel = requiredMacsPerChannel;
 
 	m_sent_start_pulse = false;
 	m_sent_image_ready = false;
 	m_kernelArray = m_layerParams[layerIndex].kernels;
 	m_biases = m_layerParams[layerIndex].biases;
-
-	//fprintf(stderr, "image pointer is %p\n", m_layerParams[layerIndex].image);
-	//fprintf(stderr, "first pixel is %d\n",
-	//		m_layerParams[layerIndex].image[0][0][0]);
 
 	m_image = m_layerParams[layerIndex].image;
 	m_outputImage = m_layerParams[layerIndex + 1].image;
@@ -396,8 +479,8 @@ int zs_driverMonitor::setCurrentLayer(unsigned int layerIndex) {
 
 	m_inputLayerPadding = m_layerParams[layerIndex].padding;
 	m_outputLayerPadding = m_layerParams[layerIndex + 1].padding;
-	dumpImage();
-	dumpKernels();
+
+	return (0);
 
 }
 
@@ -414,11 +497,9 @@ void zs_driverMonitor::readNetwork(const char *fileName) {
 	}
 	m_layerParams = new t_layerParams[m_numLayers + 1];
 
-	//    m_layerFinisheTimes = new int[m_numLayers+1];
-	//    memset(m_layerFinishTimes,0,sizeof(int)*(m_numLayers+1));
-
-	for (unsigned int i = 0; i < m_numLayers; i++)
+	for (unsigned int i = 0; i < m_numLayers; i++) {
 		readLayer(fp, m_layerParams[i], i == 0);
+	}
 
 	//initialize the final layer (not really a layer, just a storage for the top layer output)
 	int divisor = (m_layerParams[m_numLayers - 1].pooling_enabled ? 2 : 1);
@@ -434,13 +515,14 @@ void zs_driverMonitor::readNetwork(const char *fileName) {
 			(m_layerParams[m_numLayers - 1].num_input_rows - last_kernel_size
 					+ 1 + 2 * m_layerParams[m_numLayers - 1].padding) / divisor;
 	initializePixelArray(m_layerParams[m_numLayers]);
+	initializeKernelArray(m_layerParams[m_numLayers]);
+	initializeBiasArray(m_layerParams[m_numLayers]);
 
 	error_counter = 0;
 	error_on_SMs = 0;
 }
 
 void zs_driverMonitor::checkMarker(FILE *fp, const char * marker) {
-	//fprintf(stderr, "checking marker %s\n", marker);
 	char line[256];
 	safe_fscanf(fp, "%s", line);
 	if (!strstr(line, marker)) {
@@ -461,12 +543,6 @@ bool firstLayer) {
 		paramsAsArray[i] = temp;
 	}
 
-	//    layerParam.num_input_rows += layerParam.padding*2;
-	//    layerParam.num_input_column += layerParam.padding*2;
-
-	//fprintf(stderr, "layer params: %u:%u:%u\n", layerParam.num_input_channels,
-	//		layerParam.num_output_channels, layerParam.kernel_size);
-
 	initializeKernelArray(layerParam);
 	initializeBiasArray(layerParam);
 	initializePixelArray(layerParam);
@@ -483,13 +559,10 @@ bool firstLayer) {
 	}
 }
 
-void zs_driverMonitor::initializeInternalVariables() {
-	printf("internal init\n");
+void zs_driverMonitor::setInternalVariables() {
 
 	current_control = current_write = current_read = 0;
 	m_currentInitStep = 0;
-
-	//s2mm_wait_counter = 0;
 
 	m_pixelArrayWritePos = m_nPixelsArray = 0;
 
@@ -514,25 +587,94 @@ void zs_driverMonitor::initializeInternalVariables() {
 	m_currentPixelPosition = m_numPixelsReady = 0;
 	m_idpBuffer_pos = 0;
 
-	m_kernelWritePos = m_imageWritePos = m_currentOutputChannel =
-			m_currentOutputYPos = m_currentOutputXPos = 0;
-	m_currentInputChannel = m_currentInputYPos = m_currentInputXPos =
-			m_wroteImageDone = m_currentInputRowShift = m_biasWritePos = 0;
+	m_kernelWritePos = 0;
+	m_imageWritePos = 0;
+	m_currentOutputChannel = 0;
+	m_currentOutputYPos = 0;
+	m_currentOutputXPos = 0;
+	m_currentInputChannel = 0;
+	m_currentInputYPos = 0;
+	m_currentInputXPos = 0;
+	m_wroteImageDone = 0;
+	m_currentInputRowShift = 0;
+	m_biasWritePos = 0;
 
-	m_completedKernelWrite = m_completedImageWrite = m_completedBiasWrite =
-			m_gotAllPixels = m_completedConfigWrite = false;
+	m_completedKernelWrite = false;
+	m_completedImageWrite = false;
+	m_completedBiasWrite = false;
+	m_gotAllPixels = false;
+	m_completedConfigWrite = false;
 
 	for (unsigned int i = 0; i < NUM_MAC_BLOCKS; ++i) {
 		m_currentOutputCol[i] = 0;
 		m_currentOutputRow[i] = 0;
 	}
 
-	m_anchorChannel = new int[m_macs_per_channel];
-	m_anchorColumn = new int[m_macs_per_channel];
-	m_anchorRow = new int[m_macs_per_channel];
-	m_anchorShift = new int[m_macs_per_channel];
-	m_previousPixelIndex = new int[m_macs_per_channel];
-	m_activePatch = new int ***[m_macs_per_channel];
+	return;
+}
+
+void zs_driverMonitor::initializeInternalVariables() {
+
+	current_control = current_write = current_read = 0;
+	m_currentInitStep = 0;
+
+	m_pixelArrayWritePos = m_nPixelsArray = 0;
+
+	memset(m_oldValuesTop, 0, sizeof(int) * 8);
+	memset(m_oldValuesBot, 0, sizeof(int) * 8);
+	memset(m_idp_decodePosition, 0, sizeof(unsigned int) * 8);
+	memset(m_mac_stripe_index, 0, sizeof(unsigned int) * 8);
+
+	for (unsigned int i = 0; i < 8; ++i)
+		m_idp_positionConsideredOnce[i] = false;
+
+	m_log2_macs_per_channel = 0;
+	unsigned int temp = m_macs_per_channel;
+	while (temp >>= 1)
+		m_log2_macs_per_channel++;
+
+	m_currentDecodeIndex = -16;
+	m_currentDecodeSM = 0;
+
+	m_firstAxiWrite = true;
+
+	m_currentPixelPosition = m_numPixelsReady = 0;
+	m_idpBuffer_pos = 0;
+
+	m_kernelWritePos = 0;
+	m_imageWritePos = 0;
+	m_currentOutputChannel = 0;
+	m_currentOutputYPos = 0;
+	m_currentOutputXPos = 0;
+	m_currentInputChannel = 0;
+	m_currentInputYPos = 0;
+	m_currentInputXPos = 0;
+	m_wroteImageDone = 0;
+	m_currentInputRowShift = 0;
+	m_biasWritePos = 0;
+
+	m_completedKernelWrite = false;
+	m_completedImageWrite = false;
+	m_completedBiasWrite = false;
+	m_gotAllPixels = false;
+	m_completedConfigWrite = false;
+
+	for (unsigned int i = 0; i < NUM_MAC_BLOCKS; ++i) {
+		m_currentOutputCol[i] = 0;
+		m_currentOutputRow[i] = 0;
+	}
+
+	try {
+		m_anchorChannel = new int[m_macs_per_channel];
+		m_anchorColumn = new int[m_macs_per_channel];
+		m_anchorRow = new int[m_macs_per_channel];
+		m_anchorShift = new int[m_macs_per_channel];
+		m_previousPixelIndex = new int[m_macs_per_channel];
+		m_activePatch = new int ***[m_macs_per_channel];
+
+	} catch (const std::bad_array_new_length &e) {
+		std::cout << e.what() << '\n';
+	}
 
 	for (unsigned int p = 0; p < m_macs_per_channel; ++p) {
 		m_anchorChannel[p] = m_anchorColumn[p] = m_anchorRow[p] =
@@ -573,6 +715,7 @@ void zs_driverMonitor::initializeInternalVariables() {
 		}
 
 	}
+
 }
 
 void zs_driverMonitor::readKernels(FILE *fp, t_layerParams &layerParam) {
@@ -623,9 +766,6 @@ void zs_driverMonitor::initializePixelArray(t_layerParams & layerParam) {
 	unsigned int height = layerParam.num_input_rows;
 	unsigned int width = layerParam.num_input_column;
 
-	//fprintf(stderr, "initializing pixel array %d:%d:%d\n", num_channels, height,
-	//		width);
-
 	image = new int **[num_channels];
 	for (unsigned int i = 0; i < num_channels; ++i) {
 		image[i] = new int *[height];
@@ -642,9 +782,13 @@ void zs_driverMonitor::initializePixelArray(t_layerParams & layerParam) {
 void zs_driverMonitor::initializeBiasArray(t_layerParams & layerParam) {
 	int * &biases = layerParam.biases;
 	unsigned int num_output_channels = layerParam.num_output_channels;
-	//fprintf(stderr, "initializing bias array %d\n", num_output_channels);
 
-	biases = new int[num_output_channels];
+	try {
+		biases = new int[num_output_channels];
+	} catch (const std::bad_array_new_length &e) {
+		std::cout << e.what() << '\n';
+	}
+
 	for (unsigned int i = 0; i < num_output_channels; ++i)
 		biases[i] = 0;
 }
@@ -654,10 +798,12 @@ void zs_driverMonitor::initializeKernelArray(t_layerParams & layerParam) {
 	unsigned int kernel_size = layerParam.kernel_size;
 	unsigned int num_input_channels = layerParam.num_input_channels;
 	unsigned int num_output_channels = layerParam.num_output_channels;
-	//fprintf(stderr, "initializing kernel array %d:%d:%d:%d\n",
-	//		num_output_channels, num_input_channels, kernel_size, kernel_size);
 
-	kernelArray = new int ***[num_output_channels];
+	try {
+		kernelArray = new int ***[num_output_channels];
+	} catch (const std::bad_array_new_length &e) {
+		std::cout << e.what() << '\n';
+	}
 
 	for (unsigned int i = 0; i < num_output_channels; ++i) {
 		kernelArray[i] = new int **[num_input_channels];
@@ -690,83 +836,8 @@ void zs_driverMonitor::initializeConfigArray() {
 	m_initConfig[12] = 0; // config_kernel_memory_write_complete_pulse,
 	m_initConfig[13] = 0; //config_kernel_memory_resetn_pulse
 	m_initConfig[14] = 0; //config_input_image_done
+
 }
-
-int zs_driverMonitor::getGroundTruthPixel(unsigned int outputChannel, int xPos,
-		int yPos, int & fullResResult, bool debug) {
-	Assert(outputChannel < m_layerParams[m_currentLayer].num_output_channels,
-			"channel index for output pixel out of range");
-	Assert(xPos < m_imageWidth, "xPos for output pixel out of range");
-	Assert(yPos < m_hinMax, "yPos for output pixel out of range");
-
-	//    outputChannel *= (m_nchOut_pseudo/m_nchOut);
-	//    fprintf(stderr,"start of ggtp\n");
-
-	fullResResult = 0;
-	int result = 0;
-	xPos -= m_inputLayerPadding;
-	yPos -= m_inputLayerPadding;
-
-	for (int k = 0; k < m_nchIn; ++k) {
-		int mulResult = 0;
-		for (int i = yPos; i < yPos + m_hk; ++i)
-			for (int j = xPos; j < xPos + m_wk; ++j) {
-				if (i >= 0 && j >= 0 && i < m_hinMax && j < m_imageWidth) {
-					int pixel = m_image[k][i][j];
-					// if(k==0)
-					//   fprintf(m_log,"CONV MULT - IMAGE: %d - KERNEL: %d \n", m_image[k][i][j],m_kernelArray[outputChannel][k][i-yPos][j-xPos]);
-					mulResult +=
-							pixel
-									* m_kernelArray[outputChannel][k][i - yPos][j
-											- xPos];
-					//  if(debug)
-					//fprintf(stderr,"pixel %d , kernel %d runningSum:%d , %d\n",pixel,m_kernelArray[outputChannel][k][i-yPos][j-xPos],mulResult,fullResResult);
-				}
-			}
-
-		fullResResult += mulResult;
-		//  std::cout << "fullResResult         :" << fullResResult << std::endl;
-		//  std::cout << "fullResResult shifted :" <<((fullResResult>>8)<<8) << std::endl;
-
-		mulResult =
-				(truncateInt(mulResult >> m_nFracBits, 12)
-						| (mulResult < 0 ?
-								(~0 << (sizeof(int) * 8 - m_nFracBits)) : 0)); //sign extension to fill the leftmost m_nFracBits
-		result = result + mulResult;
-		// std::cout << "result                :" << result << std::endl;
-
-		result = truncateInt(result + mulResult, 12);
-	}
-	//if (debug)
-	// fprintf(stderr, "bias %d , sum before bias %d\n",
-	// m_biases[outputChannel * (m_nchOut_pseudo / m_nchOut)] << 8,
-	// fullResResult);
-
-	fullResResult += (m_biases[outputChannel * (m_nchOut_pseudo / m_nchOut)]
-			<< 8);
-
-	return (fullResResult);
-
-	/*int result_trunc;
-	 if (result > 0) {
-	 result_trunc = (result >> m_nFracBits);
-	 } else {
-	 result_trunc = (result >> m_nFracBits
-	 | (result < 0 ? (~0 << (sizeof(int) * 8 - m_nFracBits)) : 0));
-	 int result_shift = result << (sizeof(int) * 8 - m_nFracBits);
-	 //result_shift = result_shift >> (sizeof(int)*8 - m_nFracBits);
-
-	 if (result_shift != 0) {
-	 result_trunc = result_trunc + 1; //Added missing -1 for 2 complement
-	 }
-	 }
-
-	 result_trunc = truncateInt(result_trunc,16);
-	 result_trunc <<= 8;
-	 std::cout << "result_trunc           :" << result_trunc << std::endl;
-
-	 return result_trunc;*/
-} ///// END int getGroundTruthPixel(unsigned int outputChannel,int xPos,int yPos,int & fullResResult,bool debug = false)
 
 void zs_driverMonitor::sendConfigData(CONFIG_TYPE config_type, int data) {
 	input_sigs->s_input_bus_valid = 1;
@@ -787,7 +858,6 @@ bool zs_driverMonitor::initializationLoop() {
 	} else {
 		if (m_currentInitStep == config_kernel_memory_resetn_pulse + 1) {
 			sendConfigData(config_padding_set, m_inputLayerPadding);
-			//fprintf(stderr, "initi step padding %d\n", m_currentInitStep);
 			++m_currentInitStep;
 			return (false);
 		}
@@ -854,24 +924,13 @@ void zs_driverMonitor::writeToAxi() {
 			| ((unsigned int) int_to_short(
 					input_sigs->s_input_bus_config_reg_addr[1]) << 11);
 
-	//fprintf(m_axiDebug,"lo %d, hi %d\n",axiWord[0],axiWord[1]);
-	/*m_axiDebug = fopen("axiDebug","a");
-	 fprintf(m_axiDebug,"%08x%08x\n",axiWord[1],axiWord[0]);
-	 fclose(m_axiDebug);*/
-
-	/*printf("virtual source address  %p\n", virtual_source_address_);
-	 printf("virtual address  %p\n", virtual_address_);
-	 printf("virtual destination address  %p\n", virtual_destination_address_);*/
-
 	if (m_firstAxiWrite) {
-		//printf("first axi write setting \n");
 		axiWord[1] |= (1 << 18);
 		axiWord[1] |= (MAX_BURST << 19); //(m_maxOutPixelsNum << 19);
 		m_firstAxiWrite = false;
 	}
 
 	if (current_write >= MEM_SIZE - 2) {
-		printf("exceeded memory mapped area for AXI write, committing first\n");
 		axiWriteCommit();
 	}
 
@@ -885,7 +944,6 @@ void zs_driverMonitor::axiWriteCommit() {
 
 	if (current_write == 0)
 		return;
-	//fprintf(stderr,"committing axi writes\n");
 
 	unsigned int size_int = sizeof(int);
 
@@ -905,22 +963,17 @@ void zs_driverMonitor::axiWriteCommit() {
 					{
 		unsigned int startPos = i * size_int; //start position for transfer in bytes
 
-		unsigned int burst_size = min(MAX_BURST * TRANSLEN_,
-				(current_write - i) * size_int);
+		//unsigned int burst_size = min(MAX_BURST * TRANSLEN_,
+		//		(current_write - i) * size_int);
 
-		//printf("writing %d starting from %d\n",burst_size,startPos);
-
-		if (burst_size != MAX_BURST * TRANSLEN_)
-			fprintf(stderr, "error in padding\n");
+		//if (burst_size != MAX_BURST * TRANSLEN_)
+		//	fprintf(stderr, "error in padding\n");
 
 		writeAxiCommit_(MAX_BURST, startPos);
 
 	}
 
 	current_write = 0;
-
-	//printf("axiwrite commit\n");
-	//printf("finished committing axi writes\n");
 
 }
 
@@ -932,7 +985,7 @@ int zs_driverMonitor::writeAxiCommit_(int wordsNumber, unsigned int startPos) {
 
 	if (wordsNumber > 0 || wordsNumber <= 64) {
 
-		dma_s2mm_sync_halted_and_notIDLE_(virtual_address_);
+		//dma_s2mm_sync_halted_and_notIDLE_(virtual_address_);
 
 		// Set destination and source addresses
 		//dma_set(virtual_address, S2MM_DESTINATION_ADDRESS, dest_addr_offset);
@@ -941,7 +994,7 @@ int zs_driverMonitor::writeAxiCommit_(int wordsNumber, unsigned int startPos) {
 
 		// Enable interruptions and start S2MM and MM2S
 		//dma_set(virtual_address, S2MM_CONTROL_REGISTER, 0xf001);
-		dma_set_(virtual_address_, MM2S_CONTROL_REGISTER_, 0xf001);
+		dma_set_(virtual_address_, MM2S_CONTROL_REGISTER_, 0x0001); //0xf001
 
 		// Set tranference length for S2MM and MM2S. S2MM must be set before MM2S. In this point the tranferece starts
 		//dma_set(virtual_address, S2MM_LENGTH, TRANSLEN*wordsNumber);
@@ -949,8 +1002,8 @@ int zs_driverMonitor::writeAxiCommit_(int wordsNumber, unsigned int startPos) {
 
 		dma_mm2s_sync_(virtual_address_);
 
-		dma_set_(virtual_address_, MM2S_CONTROL_REGISTER_, 0); // Stop MM2S
-		//dma_set(virtual_address, MM2S_STATUS_REGISTER, 2); // Clear idle
+		//dma_set_(virtual_address_, MM2S_CONTROL_REGISTER_, 0); // Stop MM2S
+		dma_set_(virtual_address_, MM2S_STATUS_REGISTER_, 2); // Clear idle
 		dma_set_(virtual_address_, MM2S_STATUS_REGISTER_, 0x1000); // Clear IOC_Irq
 
 		numbytes = TRANSLEN_ * wordsNumber;
@@ -976,20 +1029,14 @@ void zs_driverMonitor::stopS2MM_() {
 
 void zs_driverMonitor::readFromAxi() {
 
-	//printf("start reading \n");
+	//printf("sem %d\n", signal_done);
+	if(m_gotAllPixels){
+		return;
+	}
 	waitValidAxiDataToRead_(MAX_BURST);
-	//printf("reading from AXI...\n");
 	unsigned int size_int = sizeof(int);
 	for (unsigned int i = 0; i < MAX_BURST * (TRANSLEN_ / size_int); i += 2) {
-		fprintf(m_readAxiFile,
-				"Reading from axi: high int %08x, low int %08x\n",
-				virtual_destination_address_[i + 1],
-				virtual_destination_address_[i]);
-		m_readWordsAxiFile = fopen("/home/root/readWordsAxiFile", "a");
-		fprintf(m_readWordsAxiFile, "%08x%08x\n",
-				virtual_destination_address_[i + 1],
-				virtual_destination_address_[i]);
-		fclose(m_readWordsAxiFile);
+
 		output_sigs->s_output_pixel_stream = virtual_destination_address_[i];
 		output_sigs->s_output_pixel_stream_valid =
 				(virtual_destination_address_[i + 1] & 3);
@@ -997,226 +1044,22 @@ void zs_driverMonitor::readFromAxi() {
 		if (output_sigs->s_output_pixel_stream == 0
 				&& output_sigs->s_output_pixel_stream_valid == 0
 				&& m_currentLayer == m_numLayers) {
-			fclose(m_readAxiFile);
-			stopS2MM_();
-			pthread_exit(NULL);
+
+			//stopS2MM_();
+			//pthread_exit(NULL); // finito
 		}
-		phase1_step();
+		pixel_step(); // get pixels and decode
 
 	}
+
 }
 
-bool zs_driverMonitor::matchToPatch(int output_pixel, int pixel_ch,
-		int pixel_xpos, int pixel_ypos, unsigned int mac_index) {
-	//    fprintf(stderr,"in match to patch %d at ch:col:row:mac_index %d:%d:%d %d\n",output_pixel,pixel_ch,pixel_xpos,pixel_ypos,mac_index);
-	int currentPatchValue =
-			m_activePatch[mac_index][pixel_ch][pixel_ypos][pixel_xpos];
-	//fprintf(m_log, "***********current MAC index %d\n", mac_index);
-
-	if (output_pixel == currentPatchValue) {
-		//fprintf(m_log, "Pixel already matched at %d at ch:col:row %d:%d:%d \n",
-		//		output_pixel, pixel_ch, pixel_xpos, pixel_ypos);
-		//fflush(m_log);
-		return (true);
-	}
-
-	unsigned int startPos = m_idp_decodePosition[mac_index];
-	unsigned int activePos = startPos;
-	int input_pixel, channel_start, row_start, column_start, shift_start;
-	for (; activePos < m_idpBuffer_pos; ++activePos) {
-
-		if ((int) mac_index == (int) m_idp_mac_index[activePos]) {
-			input_pixel = m_idp_pixels[activePos];
-			channel_start = m_idp_channel[activePos];
-			row_start = m_idp_row[activePos];
-			column_start = m_idp_column[activePos];
-			shift_start = m_idp_shift[activePos] + m_inputLayerPadding;
-			break;
-		}
-	}
-
-	if (activePos == m_idpBuffer_pos) {
-		//fprintf(m_log,
-		//		"Failed to find a candidate input pixel for for output pixel %d at ch:col:row %d:%d:%d . num pixels in buffer %d\n",
-		//		output_pixel, pixel_ch, pixel_xpos, pixel_ypos,
-		//		m_idpBuffer_pos);
-		//fflush(m_log);
-		return (false);
-	}
-
-	int actualYPos = row_start + shift_start;
-	bool consideredOnce =
-			(startPos == activePos) ?
-					(m_idp_positionConsideredOnce[mac_index]) : false;
-
-	if (actualYPos < pixel_ypos + m_hk && actualYPos >= pixel_ypos)
-		if (column_start < pixel_xpos + m_wk && column_start >= pixel_xpos) {
-			//fprintf(m_log, "currentPixel pixel %d at ch:col:row %d:%d:%d . \n",
-			//		output_pixel, pixel_ch, pixel_xpos, pixel_ypos);
-			//fprintf(m_log, "current indices ch:col:row:shift %d:%d:%d:%d\n",
-			//		channel_start, column_start, row_start, shift_start);
-
-			//fprintf(m_log,
-			//		"current kernel (out_ch:in_ch:ypos:xpos %d:%d:%d:%d) and input pixel and patch %d %d %d. input pixel buffer position %d and considered once %d \n",
-			//		pixel_ch, channel_start, actualYPos - pixel_ypos,
-			//		column_start - pixel_xpos,
-			//		m_kernelArray[pixel_ch + m_outputChannelOffset][channel_start][actualYPos
-			//				- pixel_ypos][column_start - pixel_xpos],
-			//		input_pixel, currentPatchValue, activePos, consideredOnce);
-
-			int candidate =
-					currentPatchValue
-							+ input_pixel
-									* m_kernelArray[pixel_ch
-											+ m_outputChannelOffset][channel_start][actualYPos
-											- pixel_ypos][column_start
-											- pixel_xpos];
-
-			if (candidate == output_pixel) {
-				m_activePatch[mac_index][pixel_ch][pixel_ypos][pixel_xpos] =
-						output_pixel;
-				/*fprintf(m_log, "setting patch %d:%d:%d to %d\n", pixel_ch,
-				 pixel_ypos, pixel_xpos, output_pixel);*/
-				m_processedPixels[channel_start][actualYPos][column_start]++;
-				unsigned int currentPixelIndex = (shift_start + row_start)
-						* m_imageWidth * m_nchIn + column_start * m_nchIn
-						+ channel_start;
-				/*fprintf(m_log,
-				 "debug currentPixelIndex: %d, m_previousPixelIndex : %d, currentPatchValue : %d, output_pixel : %d\n",
-				 currentPixelIndex, m_previousPixelIndex[mac_index],
-				 currentPatchValue, output_pixel);*/
-				if ((int) currentPixelIndex
-						!= (int) m_previousPixelIndex[mac_index]) {
-					m_previousPixelIndex[mac_index] = currentPixelIndex;
-					if (currentPatchValue != output_pixel) {
-						for (int j = 0; j < m_hk; ++j) {
-							for (int k = 0; k < m_wk; ++k) {
-								if (actualYPos >= j)
-									if (column_start >= k)
-										if (actualYPos - j < shift_start + 2)
-											if (pixel_xpos
-													!= column_start - k) {
-												/*fprintf(m_log,
-												 "setting extended patch %d:%d:%d  %d",
-												 pixel_ch,
-												 actualYPos - j,
-												 column_start - k,
-												 m_activePatch[mac_index][pixel_ch][actualYPos
-												 - j][column_start
-												 - k]);*/
-												m_activePatch[mac_index][pixel_ch][actualYPos
-														- j][column_start - k] +=
-														input_pixel
-																* m_kernelArray[pixel_ch
-																		+ m_outputChannelOffset][channel_start][j][k];
-												/*fprintf(m_log,
-												 "  ---->  %d (%d*%d)\n",
-												 m_activePatch[mac_index][pixel_ch][actualYPos
-												 - j][column_start
-												 - k],
-												 input_pixel,
-												 m_kernelArray[pixel_ch
-												 + m_outputChannelOffset][channel_start][j][k]);*/
-
-											}
-							}
-						}
-					}
-
-				}
-				if (consideredOnce || row_start == 0 || row_start == m_hk) {
-					m_idp_decodePosition[mac_index] = activePos + 1;
-					m_idp_positionConsideredOnce[mac_index] = false;
-				} else {
-					m_idp_decodePosition[mac_index] = activePos;
-					m_idp_positionConsideredOnce[mac_index] = true;
-				}
-
-				//fflush(m_log);
-				return true;
-
-			}
-		}
-
-	/*fprintf(m_log,
-	 "candidate pixel failed to match at buffer position %d for output pixel %d at ch:col:row %d:%d:%d . num pixels in buffer %d\n",
-	 activePos, output_pixel, pixel_ch, pixel_xpos, pixel_ypos,
-	 m_idpBuffer_pos);
-	 fflush(m_log);*/
-	return false;
-}
-
-void zs_driverMonitor::generateSMandPixels(unsigned int outputHeight,
-		unsigned int outputWidth) {
-	for (unsigned int SMidx = 0; SMidx < 16; ++SMidx) { //calculate the 16 pixels and generate SM
-
-		bottomRow = false;
-		if (!m_poolingEnabled) {
-			if ((tempPos / m_nchOut) % 2) //bottom Row
-					{
-				tempPos -= m_nchOut;
-				bottomRow = true;
-			}
-
-			shift = tempPos % m_nchOut;
-			tempPos = (tempPos - shift) / 2 + shift;
-		}
-
-		chIdx = tempPos % m_nchOut + m_outputChannelOffset;
-		tempPos /= m_nchOut;
-		xPos = tempPos % outputWidth;
-		tempPos /= outputWidth;
-		yPos = tempPos * (m_poolingEnabled ? 1 : 2) + (bottomRow ? 1 : 0);
-
-		maxPixel = -2147000000;
-
-		if (m_poolingEnabled) {
-			for (int i = 0; i < 2; ++i)
-				for (int j = 0; j < 2; ++j) {
-					//			  fprintf(stderr," %d:%d:%d->",chIdx,xPos*2+i,yPos*2+j);
-					getGroundTruthPixel(chIdx, xPos * 2 + i, yPos * 2 + j,
-							outputGroundTruthPixel);
-					//			  fprintf(stderr," %d ,",outputGroundTruthPixel);
-					maxPixel =
-							maxPixel > outputGroundTruthPixel ?
-									maxPixel : outputGroundTruthPixel;
-					//   std::cout << "maxPixel in calc pooling/relu "<< maxPixel <<std::endl;
-
-				}
-
-		} else
-			// when no pooling
-			getGroundTruthPixel(chIdx, xPos, yPos, maxPixel);
-
-		if (m_reluEnabled)
-			maxPixel = maxPixel > 0 ? maxPixel : 0;
-
-		maxPixel >>= 8;
-
-		SMpixels[SMidx] = maxPixel;
-
-		if (maxPixel != 0)
-			generatedSM |= (1 << SMidx);
-
-		//if (tempPos > 270)
-		//	std::cout << "generatedSM     " << generatedSM << std::endl;
-
-		if ((maxPixel < 0) & (m_reluEnabled == 1))
-			std::cout
-					<< "******ERROR: ReLU enabled but negative pixel generated - tempPos: "
-					<< tempPos << std::endl;
-
-		tempPos = m_currentDecodeIndex + (SMidx + 1);
-
-	}    //END calculate the 16 pixels and generate SM
-
-} // END generateSMandPixels
-
-void zs_driverMonitor::phase1_step() {
+void zs_driverMonitor::pixel_step() {
 	if (m_gotAllPixels) {
 		return;
 	}
 
+	bool m_poolingEnableda = m_poolingEnabled;
 	unsigned int unpooled_outputHeight = (m_hinMax - m_hk + 1
 			+ m_inputLayerPadding * 2);
 	unsigned int unpooled_outputWidth = m_imageWidth - m_wk + 1
@@ -1230,16 +1073,6 @@ void zs_driverMonitor::phase1_step() {
 	}
 
 	if (output_sigs->s_output_pixel_stream_valid) {
-		int out_stream = output_sigs->s_output_pixel_stream;
-		/*fprintf(m_log,
-		 "stream valid: %d, stream value %08x (low %d, high %d)\n",
-		 output_sigs->s_output_pixel_stream_valid, out_stream,
-		 out_stream & (0xFFFF), (out_stream & (0xFFFF0000)) >> 16);*/
-
-		fprintf(m_readAxiFile,
-				"stream valid: %d, stream value %08x (low %d, high %d)\n",
-				output_sigs->s_output_pixel_stream_valid, out_stream,
-				out_stream & (0xFFFF), (out_stream & (0xFFFF0000)) >> 16);
 
 		for (unsigned int decode_iter = 0; decode_iter < 2; ++decode_iter) {
 			int decoded_value = (
@@ -1252,68 +1085,10 @@ void zs_driverMonitor::phase1_step() {
 					{
 				m_currentDecodeSM = decoded_value;
 				m_currentDecodeIndex += 16; // initialized to -16, here put back to zero
-
 				tempPos = m_currentDecodeIndex;
-				generatedSM = 0;
 
-				generateSMandPixels(outputHeight, outputWidth);
-
-				std::bitset<16> x(generatedSM);
 				std::bitset<16> y(m_currentDecodeSM);
 
-				if (decoded_value != generatedSM) {
-					//      std::cout << "\n******ERROR BETWEEN SM GENERATED AND OUT OF CHIP: generatedSM   " << x<< "   decimal (" << generatedSM <<")"  << "   decodedSM   " << y << "   decimal (" << m_currentDecodeSM <<")" << std::endl;
-					//      std::cout << "tempPos   " << tempPos <<std::endl;
-					error_on_SMs++;
-					//      std::cout << "error_on_SMs   " << error_on_SMs <<std::endl;
-
-					fprintf(m_readAxiFile,
-							"******ERROR BETWEEN SM GENERATED AND OUT OF CHIP ******** generatedSM: (decimal %d). decodedSM: (decimal %d) \n",
-							generatedSM, m_currentDecodeSM);
-					fprintf(m_readAxiFile, "tempPos is: %d \n", tempPos);
-					fprintf(m_readAxiFile, "error_on_SMs is: %d \n",
-							error_on_SMs);
-
-				}
-				/* else
-				 std::cout << "correct SM:  "<< x << "   decimal (" << generatedSM <<")" << std::endl;*/
-
-				//// CHECK generatedSM and outputSM from chip. Correction to put to zero those pixels lower than truncation tolerance in generatedSM.
-				for (unsigned int i = 0; i < 16; ++i) {
-
-					if (((m_currentDecodeSM & (1 << i)) == 0)
-							& ((generatedSM & (1 << i)) == (1 << i))) {
-						fprintf(m_readAxiFile,
-								"SM index of possible error: %d, generatedSM: %d, decodedSM: %d \n",
-								i, generatedSM, m_currentDecodeSM);
-						fprintf(m_readAxiFile,
-								"Generated SM has different entry wrt output SM - SMpixels[i] is: %d \n",
-								SMpixels[i]);
-
-						// std::cout << "i:   " <<i << ",   generatedSM   " << x << ",   decodedSM   " << y << std::endl;
-						// std::cout << "Generated SM has different entry wrt output SM - SMpixels[i] is:  " << SMpixels[i] <<std::endl;
-
-						if (SMpixels[i] < PRE_TRUNCATION_TOLERANCE) {
-							generatedSM &= (~(1 << i));
-							std::bitset<16> x(generatedSM);
-							//   std::cout << "*** CHANGED AS generatedSM PIXEL IS WITHIN THE PRE_TRUNCATION_TOLERANCE *** generatedSM   " << x << ",   decodedSM   " << y << std::endl;
-
-							fprintf(m_readAxiFile,
-									"*** CHANGED AS generatedSM PIXEL IS WITHIN THE PRE_TRUNCATION_TOLERANCE *** generatedSM: %d , decodedSM: %d \n",
-									generatedSM, m_currentDecodeSM);
-						} else {
-							fprintf(m_readAxiFile,
-									"***** REAL ERROR BETWEEN generatedSM: %d , decodedSM: %d \n",
-									generatedSM, m_currentDecodeSM);
-							// std::cout << "********************************** REAL ERROR BETWEEN generatedSM   " << x << ",   decodedSM   " << y << std::endl;
-						}
-					}
-
-					//   if(i==15)
-					//       std::cout<<"***********"<<std::endl;
-				}         // end of SM correction
-
-				m_currentDecodeSM = generatedSM;
 			}
 
 			else // if SM has any entry non zero, both for encoding enabled or disabled.
@@ -1323,11 +1098,8 @@ void zs_driverMonitor::phase1_step() {
 						{
 					m_currentDecodeIndex += 16;
 					tempPos = m_currentDecodeIndex;
-					generateSMandPixels(outputHeight, outputWidth);
 					m_currentDecodeSM = (ipow(2, 16) - 1);
 				}
-
-				//// from here, part common to encoding ENABLED and DISABLED.
 
 				// assign value to outputPixel from one of the two halves of the output stream.
 				int outputPixel = decoded_value;
@@ -1336,7 +1108,6 @@ void zs_driverMonitor::phase1_step() {
 				else
 					outputPixel &= ((ipow(2, 16) - 1));
 
-				// which pixel is selected from the SM. If the SM is taken from the chip, the pixel is still to be generated - otherwise, if the SM is generated using the function, its pixels are stored in SMpixels[].
 				unsigned int MSB_one = 0;
 
 				while (!((1 << MSB_one) & m_currentDecodeSM))
@@ -1345,20 +1116,6 @@ void zs_driverMonitor::phase1_step() {
 				m_currentDecodeSM &= ~((1 << MSB_one));
 
 				tempPos = m_currentDecodeIndex + MSB_one;
-				//printf(stderr," tempPos is %d. \n", tempPos);
-
-				//// inserted heartbeat
-				//ALL PIXELS OF THE LAYER: ,outputHeight * outputWidth * m_nchOut
-				/*   unsigned int heartbeatPulse;
-				 unsigned int hbIdx;
-				 if(tempPos==0){
-				 heartbeatPulse = ( (outputHeight * outputWidth * m_nchOut) >> 1);  // about 2 pulses per layer.
-				 hbIdx=1;
-				 }
-				 if(tempPos>(heartbeatPulse*hbIdx) ) {
-				 hbIdx++;
-				 fprintf(stderr,"\n Heartbeat... (Produced %d pixels of the current layer in the current pass). \n", tempPos);
-				 }*/
 
 				// part needed to print the position of the output pixel (even if already calculated)
 				bottomRow = false;
@@ -1382,97 +1139,14 @@ void zs_driverMonitor::phase1_step() {
 				yPos = tempPos * (m_poolingEnabled ? 1 : 2)
 						+ (bottomRow ? 1 : 0);
 
-				////// from here should be removed, as the pixels of the SM are already generated and stored in SMpixels[].
-				/*
-				 // outputGroundTruthPixel;
-				 maxPixel = -2147000000;
-				 if(m_poolingEnabled)
-				 {
-				 for(int i=0;i<2;++i)
-				 for(int j=0;j<2;++j)
-				 {
-				 //			  fprintf(stderr," %d:%d:%d->",chIdx,xPos*2+i,yPos*2+j);
-				 getGroundTruthPixel(chIdx,xPos*2+i,yPos*2+j,outputGroundTruthPixel);
-				 //			  fprintf(stderr," %d ,",outputGroundTruthPixel);
-				 maxPixel = maxPixel > outputGroundTruthPixel ? maxPixel : outputGroundTruthPixel;
-				 }
-				 //		    fprintf(stderr,"\n");
-				 }
-				 else // when no pooling
-				 getGroundTruthPixel(chIdx,xPos,yPos,maxPixel);
-
-				 if(m_reluEnabled)
-				 maxPixel = maxPixel > 0 ? maxPixel : 0;
-
-				 maxPixel >>=8;
-
-				 ////////////// generation of pixels stops here
-
-
-				 //// CHECK between pixels calculated in the function generateSMandPixels, and pixels calculated after getting the SM from the chip. - NO PIXELS FROM THE CHIP ARE EVALUATED HERE.
-				 if( maxPixel != SMpixels[MSB_one])
-				 {
-				 std::cout << "++++++++ ERROR: maxPixel "<< std::setw(8) << maxPixel<< std::setw(8)  << " is different from SMpixels["<< MSB_one <<"]" << std::setw(16) <<SMpixels[MSB_one] <<std::endl;
-				 }
-
-				 else{std::cout << "maxPixel equals SMpixels["<< MSB_one <<"]" << std::setw(16) <<SMpixels[MSB_one] <<std::endl;}
-				 //// END CHECK pixels calculated in the 2 different ways.
-
-				 */
-
-				/* //////////////////////////////////////// INSERTED ERRORS ////////////////////////////////////
-				 if(chIdx==0 & yPos==2 & xPos==3)
-				 {
-				 if(outputPixel<0)
-				 outputPixel-=10*PRE_TRUNCATION_TOLERANCE;
-				 else
-				 outputPixel+=10*PRE_TRUNCATION_TOLERANCE;
-				 }
-				 */
-
-				/*      //// checking condition, when calculating the pixels from the SM taken from the chip.
-				 if(abs(maxPixel - outputPixel) > PRE_TRUNCATION_TOLERANCE) {
-				 fprintf(stderr,"*********************** ERROR when decoding output of PRE block, in position row:col:ch %d:%d:%d  ---  got pixel %d, expected %d\n",yPos,xPos,chIdx,outputPixel,maxPixel);
-				 error_counter++;}
-				 //else
-				 //fprintf(m_log,"Successfully matched output of PRE block, got pixel %d at row:col:ch %d:%d:%d. Expected %d\n",outputPixel,yPos,xPos,chIdx,maxPixel);
-				 */
-
-				//// CHECK IF CALCULATED PIXELS ARE EQUAL TO PIXELS FROM CHIP
-				if (abs(
-						SMpixels[MSB_one]
-								- outputPixel) >PRE_TRUNCATION_TOLERANCE) {
-					fprintf(m_readAxiFile,
-							"*********************** ERROR when decoding output of PRE block, in position row:col:ch %d:%d:%d  ---  got pixel %d, expected %d\n",
-							yPos, xPos, chIdx, outputPixel, SMpixels[MSB_one]);
-					std::cout << "++++++++ ERROR: outputPixel " << std::setw(8)
-							<< outputPixel << std::setw(8)
-							<< " is different from SMpixels[" << MSB_one << "]"
-							<< std::setw(16) << SMpixels[MSB_one] << std::endl;
-					error_counter++;
-					fprintf(m_readAxiFile,
-							"*********************** ERROR number %d\n",
-							error_counter);
-					//std::cout << "error_counter: " << error_counter
-					//		<< std::endl;
-				} else
-					fprintf(m_readAxiFile,
-							"Successfully matched output of PRE block: got pixel %d at row:col:ch %d,%d,%d. Expected %d \n",
-							outputPixel, yPos, xPos, chIdx, SMpixels[MSB_one]);
-				//std::cout << "Successfully matched output of PRE block: got pixel" << std::setw(8) << outputPixel << " at row:col:ch"<< std::setw(8) << yPos << ", " << xPos << ", " << chIdx<< std::setw(8) <<" . Expected "<< std::setw(8) << SMpixels[MSB_one]  << std::endl;
-				//// end check pixels from chip.
-
+				//printf("chIdx %d  yPos %d  xPos%d\n", chIdx, yPos, xPos);
+				//int chIdxa = chIdx;
+				//int yPosa = yPos;
+				//int xPosa = xPos;
 				m_outputImage[chIdx][yPos][xPos] = outputPixel;
 
-				if (m_currentDecodeSM == 0
-						&& (m_currentDecodeIndex + 16)
+				if ((m_currentDecodeIndex + 16)
 								== (int) (outputHeight * outputWidth * m_nchOut)) {
-					fprintf(stderr,
-							"++++++++++++++++++++++++++++++++++++++++++Got all pixels %d\n",
-							outputHeight * outputWidth * m_nchOut);
-					fprintf(m_readAxiFile,
-							"++++++++++++++++++++++++++++++++++++++++++Got all pixels %d\n",
-							outputHeight * outputWidth * m_nchOut);
 					m_gotAllPixels = true;
 				}
 
@@ -1487,42 +1161,39 @@ void zs_driverMonitor::phase1_step() {
 void zs_driverMonitor::phase2_step() {
 	//write the kernel registers
 	input_sigs->s_output_pixel_stream_enable = 1;
-	if (m_completedImageWrite)
-		fprintf(m_logPixels, "DONE\n");
 
-	if (!m_completedConfigWrite)
+	if (!m_completedConfigWrite) {
 		m_completedConfigWrite = initializationLoop();
+	}
 
 	else if (!m_completedBiasWrite) {
-		if (!(m_biasWritePos % m_macs_per_channel))
+
+		if (!(m_biasWritePos % m_macs_per_channel)) {
 			writeBiasValue(
 					m_biases[m_biasWritePos / m_macs_per_channel
 							+ m_outputChannelOffset], m_biasWritePos);
-		else
+		} else {
 			writeBiasValue(0, m_biasWritePos);
+		}
 
 		m_biasWritePos++;
-		// if(m_nchOut != m_nchOut_pseudo)
-		//   {
-		//     m_biasWritePos += m_nchOut_pseudo / m_nchOut;
-		//     fprintf(stderr,"bias increment %d\n",m_nchOut_pseudo / m_nchOut);
-		//   }
-		// else
-		//   m_biasWritePos += m_macs_per_channel;
+
 		m_completedBiasWrite = (m_biasWritePos >= NUM_MAC_BLOCKS);
+
 	}
 
 	else if (!m_completedKernelWrite) {
+
 		int nKernels = 0;
 		int kernel[2];
 		kernel[0] = kernel[1] = 0;
 		for (; nKernels < 2; ++nKernels) {
 			unsigned int tempPos = m_kernelWritePos;
 
-			unsigned int xPos = tempPos % m_wk;
+			unsigned int xPoss = tempPos % m_wk;
 			tempPos /= m_wk;
 
-			unsigned int yPos = tempPos % m_hk;
+			unsigned int yPoss = tempPos % m_hk;
 			tempPos /= m_hk;
 
 			unsigned int srcChPos = tempPos % m_nchIn_pseudo;
@@ -1533,16 +1204,12 @@ void zs_driverMonitor::phase2_step() {
 			int pseudo_ratio = m_nchOut_pseudo / m_nchOut;
 			if (!((int) dstChPos % (int) pseudo_ratio)
 					&& (int) srcChPos < (int) m_nchIn) {
-				//	    fprintf(stderr,"dstChPos, pseudoRation %d : %d -- %d\n",dstChPos,pseudo_ratio,m_kernelWritePos);
 				kernel[nKernels] =
-						m_kernelArray[dstChPos / pseudo_ratio][srcChPos][yPos][xPos];
-				//		writeKernelValue(m_kernelArray[dstChPos/pseudo_ratio][srcChPos][yPos][xPos]);
-				//	    fprintf(stderr,"writing kernel value %d at %d:%d:%d:%d\n",m_kernelArray[dstChPos/pseudo_ratio][srcChPos][yPos][xPos],dstChPos/pseudo_ratio,srcChPos,yPos,xPos);
+						m_kernelArray[dstChPos / pseudo_ratio][srcChPos][yPoss][xPoss];
 			}
 
 			else {
 				kernel[nKernels] = 0;
-				//		writeKernelValue(0);
 			}
 
 			++m_kernelWritePos;
@@ -1550,10 +1217,11 @@ void zs_driverMonitor::phase2_step() {
 				break;
 		}
 
-		if (nKernels == 0)
+		if (nKernels == 0) {
 			writeKernelValue(kernel, 1);
-		else
+		} else {
 			writeKernelValue(kernel, 3);
+		}
 
 		m_completedKernelWrite = ((int) m_kernelWritePos
 				== (int) (m_nchIn_pseudo * m_nchOut_pseudo * m_wk * m_hk));
@@ -1562,9 +1230,7 @@ void zs_driverMonitor::phase2_step() {
 
 	else if ((int) m_kernelWritePos
 			== (int) (m_nchIn_pseudo * m_nchOut_pseudo * m_wk * m_hk)) {
-		//fprintf(stderr, "sending kernel write complete pulse\n");
 		sendConfigData(config_kernel_memory_write_complete_pulse, 1);
-		//fprintf(stderr, "finished sending kernel write complete pulse\n");
 		++m_kernelWritePos;
 	}
 
@@ -1574,8 +1240,6 @@ void zs_driverMonitor::phase2_step() {
 	}
 
 	else if (!m_sent_image_ready && m_currentInputPass != 0) {
-		//fprintf(stderr, "sending image ready signal in pass %d\n",
-		//		m_currentInputPass);
 		sendConfigData(CONFIG_TYPE(20), 1);
 		m_completedImageWrite = true;
 		m_sent_image_ready = true;
@@ -1591,16 +1255,16 @@ void zs_driverMonitor::phase2_step() {
 				unsigned int srcChannel = tempPos % m_nchIn;
 				tempPos /= m_nchIn;
 
-				unsigned int xPos = tempPos % m_imageWidth;
+				unsigned int xPoss = tempPos % m_imageWidth;
 				tempPos /= m_imageWidth;
 
-				unsigned int yPos = tempPos;
-				if (srcChannel == 0 && xPos == 0) {
+				unsigned int yPoss = tempPos;
+				if (srcChannel == 0 && xPoss == 0) {
 					instruction[iter] = 15;
 					old_row = yPos;
 				}
 
-				pixels[iter] = m_image[srcChannel][yPos][xPos];
+				pixels[iter] = m_image[srcChannel][yPoss][xPoss];
 				++m_imageWritePos;
 				m_completedImageWrite = ((int) m_imageWritePos
 						>= (int) (m_nchIn * m_hinMax * m_imageWidth));
@@ -1610,15 +1274,13 @@ void zs_driverMonitor::phase2_step() {
 				}
 			}
 
-			fprintf(m_logPixels,
-					"pos : %d . writing pixels: no compression %d %d\n ",
-					m_imageWritePos, pixels[0], pixels[1]);
 			writePixels(pixels[0], pixels[1], pixel2Valid, instruction);
 			memset(instruction, 0, 2 * sizeof(int));
 
 		}
 
 		else {
+
 			bool onePixelRemaining = false;
 			int remainingPixel;
 			bool done = ((int) m_imageWritePos
@@ -1628,10 +1290,7 @@ void zs_driverMonitor::phase2_step() {
 						m_pixelArray[m_pixelArrayWritePos + 1], true,
 						instruction);
 				memset(instruction, 0, 2 * sizeof(int));
-				fprintf(m_logPixels,
-						"pos : %d . writing pixels: no sparsity map %d %d\n ",
-						m_imageWritePos, m_pixelArray[m_pixelArrayWritePos],
-						m_pixelArray[m_pixelArrayWritePos + 1]);
+
 				m_pixelArrayWritePos += 2;
 				if (done && m_pixelArrayWritePos == m_nPixelsArray)
 					m_completedImageWrite = true;
@@ -1642,8 +1301,6 @@ void zs_driverMonitor::phase2_step() {
 						instruction);
 				memset(instruction, 0, 2 * sizeof(int));
 
-				fprintf(m_logPixels, "Writing final pixel %d\n ",
-						m_pixelArray[m_pixelArrayWritePos]);
 				m_completedImageWrite = true;
 			}
 
@@ -1662,31 +1319,28 @@ void zs_driverMonitor::phase2_step() {
 						unsigned int srcChannel = tempPos % m_nchIn;
 						tempPos /= m_nchIn;
 
-						unsigned int xPos = tempPos % m_imageWidth;
+						unsigned int xPoss = tempPos % m_imageWidth;
 						tempPos /= m_imageWidth;
 
-						unsigned int yPos = tempPos;
+						unsigned int yPoss = tempPos;
 						done = ((int) m_imageWritePos
 								>= (int) (m_nchIn * m_hinMax * m_imageWidth));
 
-						if (srcChannel == 0 && xPos == 0) {
+						if (srcChannel == 0 && xPoss == 0) {
 							instruction[empty_iter] = 15;
-							old_row = yPos;
+							old_row = yPoss;
 						}
-						//			fprintf(m_logPixels,"At position %d(%d:%d:%d) in iterations %d:%d with pixel %d\n",m_imageWritePos,xPos,yPos,srcChannel,iter,empty_iter,done ? 0 : m_image[srcChannel][yPos][xPos]);
 
 						if (done) {
 							++m_imageWritePos;
 							break;
 						}
 
-						if (srcChannel == 0 && xPos == 0 && yPos != 0
+						if (srcChannel == 0 && xPoss == 0 && yPoss != 0
 								&& iter != 0)
 							break;
 
-						//		    printf("before pixel acquisition %d %d %d\n",srcChannel,yPos,xPos);
-						int pixel = m_image[srcChannel][yPos][xPos];
-						//		    printf("after pixel acquisition\n");
+						int pixel = m_image[srcChannel][yPoss][xPoss];
 
 						if (pixel != 0) {
 							m_pixelArray[m_nPixelsArray++] = pixel;
@@ -1701,9 +1355,6 @@ void zs_driverMonitor::phase2_step() {
 						instruction[0] = 0;
 						writePixels(remainingPixel, SM, true, instruction);
 						memset(instruction, 0, 2 * sizeof(int));
-						fprintf(m_logPixels,
-								"writing remaining pixel and sparsity map %d %d\n ",
-								remainingPixel, SM);
 
 						break; //from empty_iter
 					}
@@ -1714,9 +1365,7 @@ void zs_driverMonitor::phase2_step() {
 						else {
 							writePixels(0, SM, true, instruction);
 							memset(instruction, 0, 2 * sizeof(int));
-							fprintf(m_logPixels,
-									"pos:%d writing sparsity map after empty sparsity map %d\n ",
-									m_imageWritePos, SM);
+
 						}
 					}
 
@@ -1724,10 +1373,6 @@ void zs_driverMonitor::phase2_step() {
 						writePixels(SM, m_pixelArray[m_pixelArrayWritePos],
 						true, instruction);
 						memset(instruction, 0, 2 * sizeof(int));
-
-						fprintf(m_logPixels,
-								"writing new sparsity map and first pixel %d %d\n ",
-								SM, m_pixelArray[m_pixelArrayWritePos]);
 
 						++m_pixelArrayWritePos;
 						break; //from empty_iter
@@ -1743,79 +1388,36 @@ void zs_driverMonitor::phase2_step() {
 		axiWriteCommit();
 }
 
-void zs_driverMonitor::dumpImage() {
-	char temp[100] = "res_";
-	char buffer[30];
-	sprintf(buffer, "%d", m_currentLayer);
-	strcat(temp, buffer);
-
-	FILE * fp;
-	fp = fopen(temp, "w");
-	if (fp == NULL) {
-		printf("error opening file\n");
+int zs_driverMonitor::threadExists(){
+	if(pthread_kill(m_readThread, 0) != 0){
+		launchThread();
+		printf("thread launched again\n");
+	}else{
+		printf("thread is there\n");
 	}
-
-	for (int j = 0; j < m_hinMax; ++j) {
-		for (int k = 0; k < m_imageWidth; ++k) {
-			for (int i = 0; i < m_nchIn; ++i)
-				fprintf(fp, "%d ", m_image[i][j][k]);
-			fprintf(fp, "\t");
-		}
-		fprintf(fp, "\n");
-	}
-
-	fclose(fp);
-}
-
-void zs_driverMonitor::dumpWaveforms(unsigned int currentStep) {
-	for (unsigned int i = 0; i < 8; ++i) {
-		char fileName[100];
-		sprintf(fileName, "wf_compute%d", i);
-		m_compute_wfs[i].dump(fileName);
-	}
-	m_writeConfig_wf.dump("wf_writeConfig");
-	m_writeKernel_wf.dump("wf_writeKernel");
-	m_writePixel_wf.dump("wf_writePixel");
-	m_writeBias_wf.dump("wf_writeBias");
-	m_readPixel_wf.dump("wf_readPixel");
-
-	fprintf(m_layerInfo,
-			"macsPerChannel %d endStep %d kernel_size %d imageWidth %d imageHeight %d nInputChannels %d nOutputChannels %d inputPadding %d pooling %d relu %d currentPass %d numPasses %d sparsity %f layerNumber %d\n",
-			m_macs_per_channel, currentStep, m_wk, m_imageWidth, m_hinMax,
-			m_nchIn, m_nchOut, m_inputLayerPadding, m_poolingEnabled,
-			m_reluEnabled, m_currentInputPass, m_numInputPasses, getSparsity(),
-			m_currentLayer);
-	fflush(m_layerInfo);
-}
-
-double zs_driverMonitor::getSparsity() {
-	//    fprintf(stderr,"getting sparsity for output of layer %d m_curren
-	int outputWidth = m_layerParams[m_currentLayer + 1].num_input_column;
-	int outputHeight = m_layerParams[m_currentLayer + 1].num_input_rows;
-	int num_output_channels = m_layerParams[m_currentLayer].num_output_channels;
-	unsigned int numZeros = 0;
-	for (int i = 0; i < num_output_channels; ++i)
-		for (int j = 0; j < outputHeight; ++j)
-			for (int k = 0; k < outputWidth; ++k)
-				if (m_outputImage[i][j][k] == 0)
-					++numZeros;
-	return (numZeros * 1.0 / (outputWidth * outputHeight * num_output_channels));
 }
 
 int zs_driverMonitor::processingLoop(unsigned int currentStep) {
 
-	/*if (m_currentLayer >= m_numLayers) {
-	 sleep(1);
-	 }*/
+
+	if (currentStep == 0) {
+		gettimeofday(&start, NULL);
+		counter_l = 0;
+	}
 
 	if (!m_activeProcessing) {
-
+		if (m_currentLayer != 0) {
+			start = end;
+		}
+		gettimeofday(&end, NULL);
+		secs = end.tv_sec - start.tv_sec;
+		usecs = end.tv_usec - start.tv_usec;
+		mtime = ((secs) * 1000 + usecs / 1000.0) + 0.5;
+		time_for_eval_layer[m_currentLayer - 1] = mtime;
 		if (setCurrentLayer(m_currentLayer) == FINISHED) {
-			printf("got here\n");
 			return (FINISHED);
 		}
-		printf("before initialize internal\n");
-		initializeInternalVariables();
+		setInternalVariables();
 		initializeConfigArray();
 	}
 
@@ -1824,48 +1426,24 @@ int zs_driverMonitor::processingLoop(unsigned int currentStep) {
 	m_activeProcessing = true;
 
 	if (m_completedImageWrite && m_gotAllPixels) {
-		dumpWaveforms(currentStep);
 		m_activeProcessing = false;
 		++m_currentInputPass;
-		fprintf(stderr,
-				"+++++++++ Finished processing layer %d, pass %d of %d\n",
-				m_currentLayer, m_currentInputPass, m_numInputPasses);
 		if (m_currentInputPass == m_numInputPasses) {
 			m_currentInputPass = 0;
 			++m_currentLayer;
 		}
-
 		if (m_currentLayer == m_numLayers) {
 
-			fprintf(stderr,
-					"\n\n\n ************** evaluating FC layers **************\n");
+			struct timeval start, end;
+			long mtime, secs, usecs;
+			gettimeofday(&start, NULL);
 			evaluateFCLayers();
+			gettimeofday(&end, NULL);
+			secs = end.tv_sec - start.tv_sec;
+			usecs = end.tv_usec - start.tv_usec;
+			mtime = ((secs) * 1000 + usecs / 1000.0) + 0.5;
+			time_for_eval_fc = mtime;
 
-			/*fprintf(stderr, "\n *** \n First FC layer output: \n");
-			 for (unsigned int i = 0; i < IP1_OP_SIZE; i++) {
-			 fprintf(stderr, "m_fc1_output[%d]: %d \n", i, m_fc1_output[i]);
-			 }*/
-
-			fprintf(stderr, "\n *** \n Second FC layer output: \n");
-			for (unsigned int i = 0; i < IP2_OP_SIZE; i++) {
-				fprintf(stderr, "m_fc2_output[%d]: %d \n", i, m_fc2_output[i]);
-			}
-
-			if (error_counter > 0) {
-				fprintf(stderr,
-						"\n\n\n\n +++++++++ SIMULATION IS OVER +++++++++ \n\n");
-				fprintf(stderr, " +++   total error count is: %d ",
-						error_counter);
-				fprintf(stderr,
-						"\n\n ++++++++++++++++++++++++++++++++++++++ \n\n\n\n");
-			}
-
-			else {
-				fprintf(stderr,
-						"\n\n\n\n --------- SIMULATION IS OVER --------- \n\n");
-				fprintf(stderr,
-						"\n\n\n\n --------- NO ERRORS ARE COUNTED ------ \n\n");
-			}
 		}
 
 	}
@@ -1873,88 +1451,34 @@ int zs_driverMonitor::processingLoop(unsigned int currentStep) {
 	return (1);
 }
 
-void zs_driverMonitor::dumpKernels() {
-	char temp[100] = "kernels_";
-	char buffer[30];
-	sprintf(buffer, "%d", m_currentLayer);
-	strcat(temp, buffer);
+void zs_driverMonitor::printStatus() {
 
-	FILE * fp;
-
-	fp = fopen(temp, "w");
-	unsigned int index = 0;
-	for (int i = 0; i < m_nchOut; ++i) {
-		index = 0;
-		for (int j = 0; j < m_nchIn; ++j) {
-			for (int k = 0; k < m_hk; ++k) {
-				for (int l = 0; l < m_wk; ++l) {
-					fprintf(fp, "%d ", m_kernelArray[i][j][k][l]);
-					++index;
-					if (!(index % (m_wk * m_hk)))
-						fprintf(fp, "\n");
-				}
-			}
-		}
-		fprintf(fp, "\n\n\n");
+	if (error_counter > 0) {
+		fprintf(stderr, "\n  +++   total error count is: %d \n", error_counter);
 	}
 
-	// fprintf(fp,"biases\n\n\n");
-	// for(unsigned int i=0;i<NUM_MAC_BLOCKS;++i)
-	//   {
-	// 	fprintf(fp,"%d",m_biases[i]);
-	// 	if(!(i%m_macs_per_channel))
-	// 	  fprintf(fp,"  <-----active bias");
-	// 	fprintf(fp,"\n");
-	//   }
+	printf("######################################\n");
 
-	fclose(fp);
-}
+	printf("TIME FOR LAYER 1 NULLHOP: %ld ms\n", time_for_eval_layer[0]);
+	printf("TIME FOR LAYER 2 NULLHOP: %ld ms\n", time_for_eval_layer[1]);
+	printf("TIME FOR FC on armv7 : %ld ms\n", time_for_eval_fc);
+	printf("TIME FOR ALL %ld ms\n", time_for_all);
 
-void zs_driverMonitor::dumpPixels(const char * fileName) {
-	FILE * fp;
-
-	fp = fopen(fileName, "w");
-	unsigned int index = 0;
-	for (int k = 0; k < m_hinMax; ++k) {
-		for (int l = 0; l < m_imageWidth; ++l) {
-			for (int i = 0; i < m_nchIn; ++i) {
-				fprintf(fp, "%d ", m_image[i][k][l]);
-				++index;
-			}
-			fprintf(fp, "\t");
-		}
-		fprintf(fp, "\n\n");
+	fprintf(stderr, "\n *** \n Second FC layer output: \n");
+	for (unsigned int i = 0; i < IP2_OP_SIZE; i++) {
+		fprintf(stderr, "m_fc2_output[%d]: %d \n", i, m_fc2_output[i]);
 	}
 
-	fclose(fp);
-
-}
-
-int zs_driverMonitor::runLoop() {
-
-	unsigned long long n_clkCycles = 0;
-
-	while (1) {
-		++n_clkCycles;
-		if (processingLoop(n_clkCycles) == FINISHED) {
-			break;
-		}
-	}
-	printf("got also here\n");
-	return (1);
+	printf("\n");
 
 }
 
 void * readThreadRoutine(void * arg) {
 
 	zs_driverMonitor *zsDM = ((zs_driverMonitor *) arg);
-	zsDM->m_readAxiFile = fopen("/home/root/readAxiFile", "w");
-	if (zsDM->m_readAxiFile == NULL) {
-		printf("error opening readaxiFile\n");
-		exit(1);
-	}
 	while (1) {
 		zsDM->readFromAxi();
+		usleep(5);
 	}
 
 }

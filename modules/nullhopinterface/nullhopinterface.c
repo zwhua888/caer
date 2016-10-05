@@ -1,7 +1,10 @@
 /* NullHop Zynq Interface cAER module
  *  Author: federico.corradi@inilabs.com
  */
+#include "main.h"
+#include <libcaer/events/frame.h>
 
+#include "nullhopinterface.h"
 #include "base/mainloop.h"
 #include "base/module.h"
 #include "wrapper.h"
@@ -27,14 +30,13 @@ static struct caer_module_functions caerNullHopWrapperFunctions = {
 				&caerNullHopWrapperRun, .moduleConfig =
 		NULL, .moduleExit = &caerNullHopWrapperExit };
 
-const char * caerNullHopWrapper(uint16_t moduleID, char ** file_string,
-		double *classificationResults, int max_img_qty) {
+const char * caerNullHopWrapper(uint16_t moduleID,
+		caerFrameEventPacket imagestreamer) {
 
 	caerModuleData moduleData = caerMainloopFindModule(moduleID,
 			"caerNullHopWrapper", PROCESSOR);
 	caerModuleSM(&caerNullHopWrapperFunctions, moduleData,
-			sizeof(struct nullhopwrapper_state), 3, file_string,
-			classificationResults, max_img_qty);
+			sizeof(struct nullhopwrapper_state), 1, imagestreamer);
 
 	return (NULL);
 }
@@ -48,35 +50,49 @@ static bool caerNullHopWrapperInit(caerModuleData moduleData) {
 
 	//Initializing nullhop network..
 	state->cpp_class = newzs_driverMonitor();
+
 	zs_driverMonitor_initNet(state->cpp_class);
-	zs_driverMonitor_resetAxiBus(state->cpp_class);
+	zs_driverMonitor_launchThread(state->cpp_class);
+	//zs_driverMonitor_resetAxiBus(state->cpp_class);
 
 	return (true);
 }
 
 static void caerNullHopWrapperExit(caerModuleData moduleData) {
 	nullhopwrapperState state = moduleData->moduleState;
-	deleteMyClass(state->cpp_class); //free memory block
+
+	//zs_driverMonitor_closeThread(state->cpp_class); // join
+	//deleteMyClass(state->cpp_class); //free memory block
 }
 
 static void caerNullHopWrapperRun(caerModuleData moduleData, size_t argsNumber,
 		va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
+	caerFrameEventPacket imagestreamer_hists = va_arg(args,
+			caerFrameEventPacket*);
+
+	if (imagestreamer_hists == NULL) {
+		return;
+	}
+
 	nullhopwrapperState state = moduleData->moduleState;
-	char ** file_string = va_arg(args, char **);
-	double *classificationResults = va_arg(args, double*);
-	int max_img_qty = va_arg(args, int);
 
 	//update module state
 	state->detThreshold = sshsNodeGetDouble(moduleData->moduleNode,
 			"detThreshold");
 
-	//for (int i = 0; i < max_img_qty; i++) {
-	//printf("doing classification %d of %d\n", i, max_img_qty);
-	//if (file_string[i] != NULL) {
-	zs_driverMonitor_file_set(state->cpp_class);
-	//}
-	//}
+	//zs_driverMonitor_loadImage(state->cpp_class);
+	CAER_FRAME_ITERATOR_ALL_START(imagestreamer_hists)
 
+		printf("inside %d\n", caerFrameEventGetTSStartOfFrame(caerFrameIteratorElement));
+
+		zs_driverMonitor_threadExists(state->cpp_class);
+
+		uint8_t *picture = (uint8_t *) caerFrameEventGetPixelArrayUnsafe(caerFrameIteratorElement);
+
+		zs_driverMonitor_file_set(state->cpp_class, picture);
+
+		printf("outside %d\n", caerFrameEventGetTSStartOfFrame(caerFrameIteratorElement));
+	CAER_FRAME_ITERATOR_ALL_END
 	return;
 }

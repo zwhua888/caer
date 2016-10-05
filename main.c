@@ -187,17 +187,6 @@ static bool mainloop_1(void) {
 	caerOutputFile(7, 4, polarity, frame, imu, special);
 #endif
 
-#ifdef ENABLE_NETWORK_OUTPUT
-	// Send polarity packets out via TCP. This is the server mode!
-	// External clients connect to cAER, and we send them the data.
-	// WARNING: slow clients can dramatically slow this and the whole
-	// processing pipeline down!
-	caerOutputNetTCPServer(8, 4, polarity, frame, imu, special);
-
-	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
-	caerOutputNetUDP(9, 4, polarity, frame, imu, special);
-#endif
-
 #ifdef ENABLE_IMAGEGENERATOR
 	// save images of accumulated spikes and frames
 	int CLASSIFY_IMG_SIZE = CLASSIFYSIZE;
@@ -258,14 +247,26 @@ static bool mainloop_1(void) {
 	// create image streamer histogram/frame packet
 	caerFrameEventPacket imagestreamer = NULL;
 	caerFrameEventPacket imagestreamer_frame = NULL;
+	caerFrameEventPacket hist_packet = NULL;
 
 #if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
 	unsigned char ** frame_img_ptr = calloc(sizeof(unsigned char *), 1);
 	// generate images
-	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, frame, &imagestreamer, &imagestreamer_frame, frame_img_ptr);
+	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, frame, &imagestreamer, &imagestreamer_frame, frame_img_ptr, &hist_packet);
 #else
-	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, NULL, &imagestreamer, NULL, NULL,);
+	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, NULL, &imagestreamer, NULL, NULL, &hist_packet);
 #endif
+#endif
+
+#ifdef ENABLE_NETWORK_OUTPUT
+	// Send polarity packets out via TCP. This is the server mode!
+	// External clients connect to cAER, and we send them the data.
+	// WARNING: slow clients can dramatically slow this and the whole
+	// processing pipeline down!
+	//caerOutputNetTCPServer(8, 1, polarity);
+
+	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
+	//caerOutputNetUDP(9, 1, polarity); //, frame, imu, special);
 #endif
 
 #ifdef ENABLE_NULLHOPINTERFACE
@@ -275,10 +276,9 @@ static bool mainloop_1(void) {
 	// for example, we now classify the latest image
 	// only run CNN if we have a file to classify
 
-	if(*file_strings_classify != NULL) {
-		printf("MAIN calling nullhop\n");
-		caerNullHopWrapper(23, file_strings_classify, classification_results, (int) MAX_IMG_QTY, NULL);
-	}
+	//printf("MAIN calling nullhop\n");
+	caerNullHopWrapper(22, hist_packet);
+
 #endif
 #endif
 
@@ -296,7 +296,7 @@ static bool mainloop_1(void) {
 	// add allegro sound on detection
 #ifdef ENABLE_CAFFEINTERFACE
 	if(classification_results != NULL) {
-		caerImagestreamerBeeper(22, classification_results, (int) MAX_IMG_QTY);
+		caerImagestreamerBeeper(23, classification_results, (int) MAX_IMG_QTY);
 	}
 #endif
 #endif
@@ -315,19 +315,25 @@ static bool mainloop_1(void) {
 		}
 	}
 
-	free(file_strings_classify);
-	file_strings_classify = NULL;
-	free(*display_img_ptr);
-	*display_img_ptr = NULL;
-	free(display_img_ptr);
-	display_img_ptr = NULL;
+	if(file_strings_classify!=NULL){
+		free(file_strings_classify);
+		file_strings_classify = NULL;
+	}
+	if(*display_img_ptr != NULL){
+		free(*display_img_ptr);
+		*display_img_ptr = NULL;
+	}
+	if(display_img_ptr != NULL){
+		free(display_img_ptr);
+		display_img_ptr = NULL;
+	}
 	free(*frame_img_ptr);
 	*frame_img_ptr = NULL;
 	free(frame_img_ptr);
 	frame_img_ptr = NULL;
 	free(imagestreamer);
 	free(imagestreamer_frame);
-
+	free(hist_packet);
 
 #endif
 

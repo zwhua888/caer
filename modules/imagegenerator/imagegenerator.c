@@ -46,13 +46,14 @@ struct imagegenerator_state {
 	bool doSavePng_frame;
 	bool doSaveTxt_hist;
 	bool doSaveTxt_frame;
+	bool doSavePacket_hist;
 	int8_t mode;
 	//image matrix
 	int64_t **ImageMap;
 	int32_t numSpikes; // after how many spikes will we generate an image
 	int32_t spikeCounter; // actual number of spikes seen so far, in range [0, numSpikes]
 	int32_t counterImg; // how many spikeImages did we produce so far
-	int32_t counterTxt; 
+	int32_t counterTxt;
 	int32_t counterFrame; // how many frames did we see so far
 	int16_t sizeX;
 	int16_t sizeY;
@@ -69,26 +70,34 @@ struct imagegenerator_state {
 typedef struct imagegenerator_state *imagegeneratorState;
 
 static bool caerImageGeneratorInit(caerModuleData moduleData);
-static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, va_list args);
+static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
+		va_list args);
 static void caerImageGeneratorExit(caerModuleData moduleData);
 static bool allocateImageMap(imagegeneratorState state, int16_t sourceID);
 
-static struct caer_module_functions caerImageGeneratorFunctions = { .moduleInit = &caerImageGeneratorInit, .moduleRun =
-	&caerImageGeneratorRun, .moduleConfig =
-NULL, .moduleExit = &caerImageGeneratorExit };
+static struct caer_module_functions caerImageGeneratorFunctions = {
+		.moduleInit = &caerImageGeneratorInit, .moduleRun =
+				&caerImageGeneratorRun, .moduleConfig =
+		NULL, .moduleExit = &caerImageGeneratorExit };
 
-void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, char ** file_strings_classify,
-	int max_img_qty, int classify_img_size, char **display_img_ptr, caerFrameEventPacket frame,
-	caerFrameEventPacket *imagestreamer, caerFrameEventPacket *imagestreamer_frame, char ** frame_ptr) {
+void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity,
+		char ** file_strings_classify, int max_img_qty, int classify_img_size,
+		char **display_img_ptr, caerFrameEventPacket frame,
+		caerFrameEventPacket *imagestreamer,
+		caerFrameEventPacket *imagestreamer_frame, char ** frame_ptr,
+		caerFrameEventPacket *packet_hist) {
 
-	caerModuleData moduleData = caerMainloopFindModule(moduleID, "ImageGenerator", PROCESSOR);
+	caerModuleData moduleData = caerMainloopFindModule(moduleID,
+			"ImageGenerator", PROCESSOR);
 	if (moduleData == NULL) {
 		return;
 	}
 
-	caerModuleSM(&caerImageGeneratorFunctions, moduleData, sizeof(struct imagegenerator_state), 10, polarity,
-		file_strings_classify, max_img_qty, classify_img_size, display_img_ptr, frame, imagestreamer, imagestreamer_frame,
-		frame_ptr);
+	caerModuleSM(&caerImageGeneratorFunctions, moduleData,
+			sizeof(struct imagegenerator_state), 10, polarity,
+			file_strings_classify, max_img_qty, classify_img_size,
+			display_img_ptr, frame, imagestreamer, imagestreamer_frame,
+			frame_ptr, packet_hist);
 
 	return;
 }
@@ -99,14 +108,21 @@ static bool caerImageGeneratorInit(caerModuleData moduleData) {
 	imagegeneratorState state = moduleData->moduleState;
 	sshsNodePutIntIfAbsent(moduleData->moduleNode, "numSpikes", 7000);
 	state->numSpikes = sshsNodeGetInt(moduleData->moduleNode, "numSpikes");
-	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSavePng_hist", true);
-	state->doSavePng_hist = sshsNodeGetBool(moduleData->moduleNode, "doSavePng_hist");
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSavePacket_hist", true);
+	state->doSavePacket_hist = sshsNodeGetBool(moduleData->moduleNode,
+			"doSavePacket_hist");
+	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSavePng_hist", false);
+	state->doSavePng_hist = sshsNodeGetBool(moduleData->moduleNode,
+			"doSavePng_hist");
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSaveTxt_hist", false);
-	state->doSaveTxt_hist = sshsNodeGetBool(moduleData->moduleNode, "doSaveTxt_hist");
+	state->doSaveTxt_hist = sshsNodeGetBool(moduleData->moduleNode,
+			"doSaveTxt_hist");
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSavePng_frame", false);
-	state->doSavePng_frame = sshsNodeGetBool(moduleData->moduleNode, "doSavePng_frame");
+	state->doSavePng_frame = sshsNodeGetBool(moduleData->moduleNode,
+			"doSavePng_frame");
 	sshsNodePutBoolIfAbsent(moduleData->moduleNode, "doSaveTxt_frame", false);
-	state->doSaveTxt_frame = sshsNodeGetBool(moduleData->moduleNode, "doSaveTxt_frame");
+	state->doSaveTxt_frame = sshsNodeGetBool(moduleData->moduleNode,
+			"doSaveTxt_frame");
 	sshsNodePutByteIfAbsent(moduleData->moduleNode, "mode", 0);
 	state->mode = sshsNodeGetByte(moduleData->moduleNode, "mode");
 
@@ -143,19 +159,20 @@ static void caerImageGeneratorExit(caerModuleData moduleData) {
  *
  */
 
-static bool save_img(int img_counter, char *img, int size_w, int size_h, char ** file_strings_classify, char state_mode,
-	int file_counter, char *directory, bool save_for_classification, int max_img_qty) {
+static bool save_img(int img_counter, char *img, int size_w, int size_h,
+		char ** file_strings_classify, char state_mode, int file_counter,
+		char *directory, bool save_for_classification, int max_img_qty) {
 
 	char id_img[15];
 	char ext[] = ".png"; // png output (possibles other formats supported by the library are bmp, ppm, TGA, psd, pnm, hdr, gif,..)
-	char filename[255] = {0};
-	char filename_d[255] = {0};
-	char filename_sym[255] = {0};
-	
+	char filename[255] = { 0 };
+	char filename_d[255] = { 0 };
+	char filename_sym[255] = { 0 };
+
 	memset(filename, 0, 255);
 	memset(filename_d, 0, 255);
-	memset(filename_sym, 0, 255);	
-	
+	memset(filename_sym, 0, 255);
+
 	strcpy(filename, directory);
 	strcat(filename, "img_");
 	sprintf(id_img, "%d", img_counter);
@@ -164,7 +181,7 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
 
 	strcpy(filename_d, directory);
 	strcat(filename_d, "img_");
-	int previous =  img_counter - 1;
+	int previous = img_counter - 1;
 	sprintf(id_img, "%d", previous);
 	strcat(filename_d, id_img); //append id_img
 	strcat(filename_d, ext); //append extension
@@ -175,21 +192,25 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
 
 	//save file and print error message if error occurs
 	if (stbi_write_png(filename, size_w, size_h, 1, img, size_w * 1) == 0) {
-		printf("Error in function \"save_img\" (saving images to disk). Path may not be found");
+		printf(
+				"Error in function \"save_img\" (saving images to disk). Path may not be found");
 		return (false);
 	}
-	
+
 	//remove previous file and symlink
-	if(remove(filename_d) != 0){
-		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove file %s.", strerror(errno));
+	if (remove(filename_d) != 0) {
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove file %s.",
+				strerror(errno));
 	}
-	if(remove(filename_sym) != 0){
-		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove symlink %s.", strerror(errno));
+	if (remove(filename_sym) != 0) {
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove symlink %s.",
+				strerror(errno));
 	}
 
 	//create symlink
-	if(symlink(filename, filename_sym) != 0){
-		caerLog(CAER_LOG_ERROR, __func__, "Failed to create symlink errno %s.", strerror(errno));
+	if (symlink(filename, filename_sym) != 0) {
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to create symlink errno %s.",
+				strerror(errno));
 	}
 
 	if (save_for_classification && file_counter < max_img_qty) {
@@ -219,19 +240,20 @@ static bool save_img(int img_counter, char *img, int size_w, int size_h, char **
  *
  */
 
-static bool save_txt(int img_counter, char *img, int size_w, int size_h, char ** file_strings_classify,
-	int file_counter, char *directory, bool save_for_classification, int max_img_qty) {
+static bool save_txt(int img_counter, char *img, int size_w, int size_h,
+		char ** file_strings_classify, int file_counter, char *directory,
+		bool save_for_classification, int max_img_qty) {
 
 	char id_img[15];
 	char ext[] = ".txt"; // txt output
-	char filename[255] = {0};
-	char filename_d[255] = {0};
-	char filename_sym[255] = {0};
-	
+	char filename[255] = { 0 };
+	char filename_d[255] = { 0 };
+	char filename_sym[255] = { 0 };
+
 	memset(filename, 0, 255);
 	memset(filename_d, 0, 255);
-	memset(filename_sym, 0, 255);	
-	
+	memset(filename_sym, 0, 255);
+
 	strcpy(filename, directory);
 	strcat(filename, "img_");
 	sprintf(id_img, "%d", img_counter);
@@ -240,7 +262,7 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 
 	strcpy(filename_d, directory);
 	strcat(filename_d, "img_");
-	int previous =  img_counter - 1;
+	int previous = img_counter - 1;
 	sprintf(id_img, "%d", previous);
 	strcat(filename_d, id_img); //append id_img
 	strcat(filename_d, ext); //append extension
@@ -248,7 +270,7 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 	strcat(filename_sym, directory);
 	strcat(filename_sym, "latest");
 	strcat(filename_sym, ext); //append extension
-	
+
 	FILE* fd1;
 	fd1 = fopen(filename, "wb");
 	if (fd1 == -1) {
@@ -269,16 +291,19 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 	fclose(fd1);
 
 	//remove previous file and symlink
-	if(remove(filename_d) != 0){
-		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove file %s.", strerror(errno));
+	if (remove(filename_d) != 0) {
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove file %s.",
+				strerror(errno));
 	}
-	if(remove(filename_sym) != 0){
-		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove symlink %s.", strerror(errno));
+	if (remove(filename_sym) != 0) {
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to remove symlink %s.",
+				strerror(errno));
 	}
-	
+
 	//create symlink
-	if(symlink(filename, filename_sym) != 0){
-		caerLog(CAER_LOG_ERROR, __func__, "Failed to create symlink errno %s.", strerror(errno));
+	if (symlink(filename, filename_sym) != 0) {
+		caerLog(CAER_LOG_ERROR, __func__, "Failed to create symlink errno %s.",
+				strerror(errno));
 	}
 
 	if (save_for_classification && file_counter < max_img_qty) {
@@ -286,7 +311,7 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
 		file_strings_classify[file_counter] = strdup(filename);
 		file_counter += 1;
 	}
-	
+
 	free(pixel);
 	return (true);
 }
@@ -305,12 +330,13 @@ static bool save_txt(int img_counter, char *img, int size_w, int size_h, char **
  *  quadratic_image_map: (return value) normalized quadratic center of image_map
  */
 
-static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w, int size_h, int size_quad,
-	unsigned char * quadratic_image_map) {
+static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w,
+		int size_h, int size_quad, unsigned char * quadratic_image_map) {
 
 	//check if sizes match
 	if (size_w < size_quad || size_h < size_quad) {
-		printf("\n Error in normalize_quadratic_image_map, size_quad too big.\n");
+		printf(
+				"\n Error in normalize_quadratic_image_map, size_quad too big.\n");
 		return (false);
 	}
 
@@ -358,12 +384,12 @@ static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w, in
 
 		tmp_v = ((((double) qmap[i]) - (double) mean) / (double) std);
 
-		if ((double) tmp_v > (double) outlierCut || (double) tmp_v < -(double) outlierCut) {
+		if ((double) tmp_v > (double) outlierCut
+				|| (double) tmp_v < -(double) outlierCut) {
 			//if found an outlier, set it to mean
 			foundOutlier = true;
 			qmap[i] = (int) mean;
-		}
-		else {
+		} else {
 			max_tmp_v = MAX(tmp_v, max_tmp_v);
 			min_tmp_v = MIN(tmp_v, min_tmp_v);
 		}
@@ -375,12 +401,13 @@ static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w, in
 		for (int i = 0; i < size_quad * size_quad; ++i) {
 			tmp_v = ((((double) qmap[i]) - (double) mean) / (double) std);
 			tmp = (uint16_t) round(
-				(((double) tmp_v - (double) min_tmp_v) / ((double) max_tmp_v - (double) min_tmp_v)) * (double) 255.0f);
+					(((double) tmp_v - (double) min_tmp_v)
+							/ ((double) max_tmp_v - (double) min_tmp_v))
+							* (double) 255.0f);
 			quadratic_image_map[i] = tmp & 0xFF; //uchar
 		}
-	}
-	else { //we found an outlier
-		   //we need to calculate a new mean and std
+	} else { //we found an outlier
+			 //we need to calculate a new mean and std
 		mean = 0.0f;
 		std = 0.0f;
 		max_tmp_v = FLT_MIN;
@@ -410,7 +437,9 @@ static bool normalize_to_quadratic_image_map(int64_t **image_map, int size_w, in
 
 			tmp_v = ((((double) qmap[i]) - (double) mean) / std);
 			tmp = (uint16_t) round(
-				(((double) tmp_v - (double) min_tmp_v) / ((double) max_tmp_v - (double) min_tmp_v)) * (double) 255.0f);
+					(((double) tmp_v - (double) min_tmp_v)
+							/ ((double) max_tmp_v - (double) min_tmp_v))
+							* (double) 255.0f);
 			quadratic_image_map[i] = tmp & 0xFF; //uchar
 		}
 
@@ -464,7 +493,8 @@ static void normalize_image(unsigned char * image, int size_w, int size_h) {
 	for (int x_loop = 0; x_loop < size_w * size_h * 1; ++x_loop) {
 		tmp_v = ((((double) image[x_loop]) - mean) / std);
 		tmp = (uint16_t) round(
-			(((double) tmp_v - (double) min_tmp_v) / ((double) max_tmp_v - (double) min_tmp_v)) * 255.0f);
+				(((double) tmp_v - (double) min_tmp_v)
+						/ ((double) max_tmp_v - (double) min_tmp_v)) * 255.0f);
 		image[x_loop] = (unsigned char) tmp & 0xFF; //uchar
 	}
 }
@@ -487,12 +517,15 @@ static void normalize_image(unsigned char * image, int size_w, int size_h) {
  *  windowTopLeftCornerY: y-coordinate (of top left corner of window) in original image
  *
  */
-static bool cut_out_window_from_image(unsigned char *image, int imageX, int imageY, unsigned char *window, int windowX,
-	int windowY, int windowTopLeftCornerX, int windowTopLeftCornerY) {
+static bool cut_out_window_from_image(unsigned char *image, int imageX,
+		int imageY, unsigned char *window, int windowX, int windowY,
+		int windowTopLeftCornerX, int windowTopLeftCornerY) {
 
 	// check sizes and position of window
-	if (windowTopLeftCornerX < 0 || windowTopLeftCornerY < 0 || imageX < 1 || imageY < 1 || windowX < 1 || windowY < 1
-		|| windowTopLeftCornerX + windowX - 1 >= imageX || windowTopLeftCornerY + windowY - 1 >= imageY) {
+	if (windowTopLeftCornerX < 0 || windowTopLeftCornerY < 0 || imageX < 1
+			|| imageY < 1 || windowX < 1 || windowY < 1
+			|| windowTopLeftCornerX + windowX - 1 >= imageX
+			|| windowTopLeftCornerY + windowY - 1 >= imageY) {
 		printf("\nError in cutOutWindowFromImage, sizes do not match.\n");
 		return (false);
 	}
@@ -500,13 +533,15 @@ static bool cut_out_window_from_image(unsigned char *image, int imageX, int imag
 	for (int y = 0; y < windowY; y++) {
 		for (int x = 0; x < windowX; x++) {
 
-			window[y * windowX + x] = image[(windowTopLeftCornerY + y) * imageX + (windowTopLeftCornerX + x)];
+			window[y * windowX + x] = image[(windowTopLeftCornerY + y) * imageX
+					+ (windowTopLeftCornerX + x)];
 		}
 	}
 	return (true);
 }
 
-static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
+static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber,
+		va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
 
 	// Interpret variable arguments (same as above in main function).
@@ -517,8 +552,10 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 	unsigned char ** display_img_ptr = va_arg(args, unsigned char **);
 	caerFrameEventPacket frame = va_arg(args, caerFrameEventPacket);
 	caerFrameEventPacket *imagestreamer = va_arg(args, caerFrameEventPacket*);
-	caerFrameEventPacket *imagestreamer_frame_g = va_arg(args, caerFrameEventPacket*);
+	caerFrameEventPacket *imagestreamer_frame_g = va_arg(args,
+			caerFrameEventPacket*);
 	unsigned char ** frame_ptr = va_arg(args, unsigned char **);
+	caerFrameEventPacket *hist_packet = va_arg(args, caerFrameEventPacket*);
 
 	//counter for saved images (and corresponding file strings) which are handed to caffe CNN
 	int file_string_counter = 0;
@@ -531,13 +568,20 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
 	//update module state
 	imagegeneratorState state = moduleData->moduleState;
-	state->doSavePng_hist = sshsNodeGetBool(moduleData->moduleNode, "doSavePng_hist");
-	state->doSaveTxt_hist = sshsNodeGetBool(moduleData->moduleNode, "doSaveTxt_hist");
-	state->doSavePng_frame = sshsNodeGetBool(moduleData->moduleNode, "doSavePng_frame");
-	state->doSaveTxt_frame = sshsNodeGetBool(moduleData->moduleNode, "doSaveTxt_frame");
+	state->doSavePacket_hist = sshsNodeGetBool(moduleData->moduleNode,
+			"doSavePacket_hist");
+	state->doSavePng_hist = sshsNodeGetBool(moduleData->moduleNode,
+			"doSavePng_hist");
+	state->doSaveTxt_hist = sshsNodeGetBool(moduleData->moduleNode,
+			"doSaveTxt_hist");
+	state->doSavePng_frame = sshsNodeGetBool(moduleData->moduleNode,
+			"doSavePng_frame");
+	state->doSaveTxt_frame = sshsNodeGetBool(moduleData->moduleNode,
+			"doSaveTxt_frame");
 	state->mode = sshsNodeGetByte(moduleData->moduleNode, "mode");
 
-	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode, "sourceInfo/");
+	sshsNode sourceInfoNode = sshsGetRelativeNode(moduleData->moduleNode,
+			"sourceInfo/");
 	if (!sshsNodeAttributeExists(sourceInfoNode, "apsSizeX", SHORT)) {
 		sshsNodePutShort(sourceInfoNode, "apsSizeX", CLASSIFY_IMG_SIZE);
 		sshsNodePutShort(sourceInfoNode, "apsSizeY", CLASSIFY_IMG_SIZE);
@@ -549,20 +593,27 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 		caerFrameEvent currFrameEvent;
 
 		//get latest event packages
-		for (int32_t i = caerEventPacketHeaderGetEventNumber(&frame->packetHeader) - 1; i >= 0; i--) {
+		for (int32_t i = caerEventPacketHeaderGetEventNumber(
+				&frame->packetHeader) - 1; i >= 0; i--) {
 			currFrameEvent = caerFrameEventPacketGetEvent(frame, i);
 
 			// Only operate on the last valid frame.
 			if (caerFrameEventIsValid(currFrameEvent)) {
 				// Copy the frame content to the permanent frameRenderer.
 				// Use frame sizes to correctly support small ROI frames.
-				state->frameRendererSizeX = caerFrameEventGetLengthX(currFrameEvent);
-				state->frameRendererSizeY = caerFrameEventGetLengthY(currFrameEvent);
-				state->frameRendererPositionX = caerFrameEventGetPositionX(currFrameEvent);
-				state->frameRendererPositionY = caerFrameEventGetPositionY(currFrameEvent);
-				state->frameChannels = caerFrameEventGetChannelNumber(currFrameEvent);
+				state->frameRendererSizeX = caerFrameEventGetLengthX(
+						currFrameEvent);
+				state->frameRendererSizeY = caerFrameEventGetLengthY(
+						currFrameEvent);
+				state->frameRendererPositionX = caerFrameEventGetPositionX(
+						currFrameEvent);
+				state->frameRendererPositionY = caerFrameEventGetPositionY(
+						currFrameEvent);
+				state->frameChannels = caerFrameEventGetChannelNumber(
+						currFrameEvent);
 
-				state->frameRenderer = caerFrameEventGetPixelArrayUnsafe(currFrameEvent);
+				state->frameRenderer = caerFrameEventGetPixelArrayUnsafe(
+						currFrameEvent);
 
 				break;
 			}
@@ -571,22 +622,31 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 		if (state->frameRenderer != NULL) {
 
 			//cast frame to unsigned char and return it in frame_ptr
-			*frame_ptr = (unsigned char*) malloc(state->frameRendererSizeX * state->frameRendererSizeY);
+			*frame_ptr = (unsigned char*) malloc(
+					state->frameRendererSizeX * state->frameRendererSizeY);
 			if (*frame_ptr == NULL) {
-				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate *frame_ptr.");
+				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+						"Failed to allocate *frame_ptr.");
 				return;
 			}
 
 			unsigned char *frame_img;
 			frame_img = *frame_ptr;
-			for (int frame_loop = 0; frame_loop < state->frameRendererSizeX * state->frameRendererSizeY; ++frame_loop) {
-				frame_img[frame_loop] = (unsigned char) (state->frameRenderer[frame_loop] >> 8) & 0xFF;
+			for (int frame_loop = 0;
+					frame_loop
+							< state->frameRendererSizeX
+									* state->frameRendererSizeY; ++frame_loop) {
+				frame_img[frame_loop] =
+						(unsigned char) (state->frameRenderer[frame_loop] >> 8)
+								& 0xFF;
 			}
 
 			simple2DBufferLong frame_img_d;
-			frame_img_d = simple2DBufferInitLong(state->frameRendererSizeX, state->frameRendererSizeY);
+			frame_img_d = simple2DBufferInitLong(state->frameRendererSizeX,
+					state->frameRendererSizeY);
 			if (frame_img_d == NULL) {
-				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate **frame_img_d.");
+				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+						"Failed to allocate **frame_img_d.");
 				return;
 			}
 
@@ -603,53 +663,67 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 			quadratic_image_mapf = (unsigned char*) malloc(
 			SIZE_QUADRATIC_MAP * SIZE_QUADRATIC_MAP);
 			if (quadratic_image_mapf == NULL) {
-				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate quadratic_image_map.");
+				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+						"Failed to allocate quadratic_image_map.");
 				return;
 			}
 			//normalize image map and copy it into quadratic image_map [0,255]
-			if (!normalize_to_quadratic_image_map(frame_img_d->buffer2d, state->frameRendererSizeX, state->frameRendererSizeY, SIZE_QUADRATIC_MAP,
-				quadratic_image_mapf)) {
-				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to generate quadratic image map.");
+			if (!normalize_to_quadratic_image_map(frame_img_d->buffer2d,
+					state->frameRendererSizeX, state->frameRendererSizeY,
+					SIZE_QUADRATIC_MAP, quadratic_image_mapf)) {
+				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+						"Failed to generate quadratic image map.");
 				return;
 			};
 
 			//Create small_img to display the image_map, return it (to main function) in display_img_ptr
 			unsigned char *disp_img;
-			*display_img_ptr = (unsigned char*) malloc(CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE);
+			*display_img_ptr = (unsigned char*) malloc(
+					CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE);
 			if (*display_img_ptr == NULL) {
-				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate *display_img.");
+				caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+						"Failed to allocate *display_img.");
 				return;
 			}
 			disp_img = *display_img_ptr;
 			stbir_resize_uint8(quadratic_image_mapf, SIZE_QUADRATIC_MAP,
-			SIZE_QUADRATIC_MAP, 0, disp_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, 0, 1);
+			SIZE_QUADRATIC_MAP, 0, disp_img, CLASSIFY_IMG_SIZE,
+					CLASSIFY_IMG_SIZE, 0, 1);
 			normalize_image(disp_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
 
 			// put image into frame
 			/* **** image streamer for frames *** */
 			if (disp_img != NULL) {
 				//get that single frame
-				*imagestreamer_frame_g = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0,
-					CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, 3);
+				*imagestreamer_frame_g = caerFrameEventPacketAllocate(1,
+						I16T(moduleData->moduleID), 0, CLASSIFY_IMG_SIZE,
+						CLASSIFY_IMG_SIZE, 3);
 				if (*imagestreamer_frame_g != NULL) {
-					caerFrameEvent imagestreamer_single_frame = caerFrameEventPacketGetEvent(*imagestreamer_frame_g, 0);
+					caerFrameEvent imagestreamer_single_frame =
+							caerFrameEventPacketGetEvent(*imagestreamer_frame_g,
+									0);
 					//now put stuff into the frame
 					int cs, counter;
 					counter = 0;
 					for (int y = 0; y < CLASSIFY_IMG_SIZE; y++) {
 						for (int x = 0; x < CLASSIFY_IMG_SIZE; x++) {
 							cs = y * CLASSIFY_IMG_SIZE + x;
-							imagestreamer_single_frame->pixels[counter] = (uint16_t) (disp_img[cs] << 8);
-							imagestreamer_single_frame->pixels[counter + 1] = (uint16_t) (disp_img[cs] << 8);
-							imagestreamer_single_frame->pixels[counter + 2] = (uint16_t) (disp_img[cs] << 8);
+							imagestreamer_single_frame->pixels[counter] =
+									(uint16_t) (disp_img[cs] << 8);
+							imagestreamer_single_frame->pixels[counter + 1] =
+									(uint16_t) (disp_img[cs] << 8);
+							imagestreamer_single_frame->pixels[counter + 2] =
+									(uint16_t) (disp_img[cs] << 8);
 							counter += 3;
 						}
 					}
 					//add info to the frame
-					caerFrameEventSetLengthXLengthYChannelNumber(imagestreamer_single_frame, CLASSIFY_IMG_SIZE,
-						CLASSIFY_IMG_SIZE, 3, *imagestreamer_frame_g);
+					caerFrameEventSetLengthXLengthYChannelNumber(
+							imagestreamer_single_frame, CLASSIFY_IMG_SIZE,
+							CLASSIFY_IMG_SIZE, 3, *imagestreamer_frame_g);
 					//validate frame
-					caerFrameEventValidate(imagestreamer_single_frame, *imagestreamer_frame_g);
+					caerFrameEventValidate(imagestreamer_single_frame,
+							*imagestreamer_frame_g);
 				}
 
 			}
@@ -659,48 +733,61 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
 				//create classify_img with desired CLASSIFY_IMG_SIZE (input size of CNN)
 				unsigned char *classify_frame;
-				classify_frame = (unsigned char*) malloc(CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE);
+				classify_frame = (unsigned char*) malloc(
+						CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE);
 				if (classify_frame == NULL) {
-					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate classify_frame.");
+					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+							"Failed to allocate classify_frame.");
 					return;
 				}
 				stbir_resize_uint8(quadratic_image_mapf, SIZE_QUADRATIC_MAP,
-				SIZE_QUADRATIC_MAP, 0, classify_frame, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, 0, 1);
+				SIZE_QUADRATIC_MAP, 0, classify_frame, CLASSIFY_IMG_SIZE,
+						CLASSIFY_IMG_SIZE, 0, 1);
 
 				//normalize before saving
-				normalize_image(classify_frame, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
-				if (!save_img(state->counterImg, classify_frame, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
-					file_strings_classify, state->mode, file_string_counter, CLASSIFY_IMG_DIRECTORY, true,
-					MAX_IMG_QTY)) {
-					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
+				normalize_image(classify_frame, CLASSIFY_IMG_SIZE,
+						CLASSIFY_IMG_SIZE);
+				if (!save_img(state->counterImg, classify_frame,
+						CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
+						file_strings_classify, state->mode, file_string_counter,
+						CLASSIFY_IMG_DIRECTORY, true, MAX_IMG_QTY)) {
+					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+							"Failed to save image.");
 					return;
 				}
 				free(classify_frame);
 				state->counterImg += 1;
 			}
-			
+
 			if (state->doSaveTxt_frame) {
 				//create classify_txt with desired CLASSIFY_IMG_SIZE (input size of CNN)
 				unsigned char *classify_txt;
-				classify_txt = (unsigned char*) malloc(CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
+				classify_txt = (unsigned char*) malloc(
+						CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
 				if (classify_txt == NULL) {
-					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate classify_png.");
+					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+							"Failed to allocate classify_png.");
 					return;
 				}
 				stbir_resize_uint8(quadratic_image_mapf, SIZE_QUADRATIC_MAP,
-				SIZE_QUADRATIC_MAP, 0, classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, 0, 1);
+				SIZE_QUADRATIC_MAP, 0, classify_txt, CLASSIFY_IMG_SIZE,
+						CLASSIFY_IMG_SIZE, 0, 1);
 
 				//normalize before saving
-				normalize_image(classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
-				if (!save_txt(state->counterTxt, classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
-					file_strings_classify, file_string_counter, CLASSIFY_IMG_DIRECTORY, true, MAX_IMG_QTY)) {
-					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
+				normalize_image(classify_txt, CLASSIFY_IMG_SIZE,
+						CLASSIFY_IMG_SIZE);
+				if (!save_txt(state->counterTxt, classify_txt,
+						CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
+						file_strings_classify, file_string_counter,
+						CLASSIFY_IMG_DIRECTORY, true, MAX_IMG_QTY)) {
+					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+							"Failed to save image.");
 					return;
 				}
 				free(classify_txt);
 				state->counterTxt += 1;
 			}
-			
+
 			free(quadratic_image_mapf);
 		}
 
@@ -709,9 +796,11 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 	/* **** SPIKE SECTION START *** */
 	// If the map is not allocated yet, do it.
 	if (state->ImageMap == NULL) {
-		if (!allocateImageMap(state, caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
+		if (!allocateImageMap(state,
+				caerEventPacketHeaderGetEventSource(&polarity->packetHeader))) {
 			// Failed to allocate memory, nothing to do.
-			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate memory for ImageMap.");
+			caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+					"Failed to allocate memory for ImageMap.");
 			return;
 		}
 	}
@@ -732,8 +821,7 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 				if (state->ImageMap[x][y] != INT64_MIN) {
 					state->ImageMap[x][y] = state->ImageMap[x][y] - 1;
 				}
-			}
-			else {
+			} else {
 				if (state->ImageMap[x][y] != INT64_MAX) {
 					state->ImageMap[x][y] = state->ImageMap[x][y] + 1;
 				}
@@ -748,14 +836,15 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 				SIZE_QUADRATIC_MAP * SIZE_QUADRATIC_MAP * 1);
 				if (quadratic_image_map == NULL) {
 					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-						"Failed to allocate quadratic_image_map.");
+							"Failed to allocate quadratic_image_map.");
 					return;
 				}
 				//normalize image map and copy it into quadratic image_map [0,255]
-				if (!normalize_to_quadratic_image_map(state->ImageMap, state->sizeX, state->sizeY, SIZE_QUADRATIC_MAP,
-					quadratic_image_map)) {
+				if (!normalize_to_quadratic_image_map(state->ImageMap,
+						state->sizeX, state->sizeY, SIZE_QUADRATIC_MAP,
+						quadratic_image_map)) {
 					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-						"Failed to generate quadratic image map.");
+							"Failed to generate quadratic image map.");
 					return;
 				};
 
@@ -764,43 +853,107 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
 					//create classify_img with desired CLASSIFY_IMG_SIZE (input size of CNN)
 					unsigned char *classify_img;
-					classify_img = (unsigned char*) malloc(CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
+					classify_img = (unsigned char*) malloc(
+							CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
 					if (classify_img == NULL) {
-						caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate classify_img.");
+						caerLog(CAER_LOG_ERROR,
+								moduleData->moduleSubSystemString,
+								"Failed to allocate classify_img.");
 						return;
 					}
 					stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP,
-					SIZE_QUADRATIC_MAP, 0, classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, 0, 1);
+					SIZE_QUADRATIC_MAP, 0, classify_img, CLASSIFY_IMG_SIZE,
+							CLASSIFY_IMG_SIZE, 0, 1);
 
 					//normalize before saving
-					normalize_image(classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
-					if (!save_img(state->counterImg, classify_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
-						file_strings_classify, state->mode, file_string_counter, CLASSIFY_IMG_DIRECTORY, true,
-						MAX_IMG_QTY)) {
-						caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
+					normalize_image(classify_img, CLASSIFY_IMG_SIZE,
+							CLASSIFY_IMG_SIZE);
+					if (!save_img(state->counterImg, classify_img,
+							CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
+							file_strings_classify, state->mode,
+							file_string_counter, CLASSIFY_IMG_DIRECTORY, true,
+							MAX_IMG_QTY)) {
+						caerLog(CAER_LOG_ERROR,
+								moduleData->moduleSubSystemString,
+								"Failed to save image.");
 						return;
 					}
 					free(classify_img);
 					state->counterImg += 1;
 				}
 
+				if (state->doSavePacket_hist) {
+
+					//create classify_txt with desired CLASSIFY_IMG_SIZE (input size of CNN)
+					unsigned char *classify_hist;
+					classify_hist = (unsigned char*) malloc(
+							CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
+					if (classify_hist == NULL) {
+						caerLog(CAER_LOG_ERROR,
+								moduleData->moduleSubSystemString,
+								"Failed to allocate classify_txt.");
+						return;
+					}
+					stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP,
+					SIZE_QUADRATIC_MAP, 0, classify_hist, CLASSIFY_IMG_SIZE,
+							CLASSIFY_IMG_SIZE, 0, 1);
+
+					//normalize before saving
+					normalize_image(classify_hist, CLASSIFY_IMG_SIZE,
+							CLASSIFY_IMG_SIZE);
+
+
+					//get that single frame
+					*hist_packet = caerFrameEventPacketAllocate(1,
+							I16T(moduleData->moduleID), 0, CLASSIFY_IMG_SIZE,
+							CLASSIFY_IMG_SIZE, 1);
+					if (*hist_packet != NULL) {
+						caerFrameEvent imagestreamer_single_frame =
+								caerFrameEventPacketGetEvent(
+										*hist_packet, 0);
+
+						//add info to the frame
+						caerFrameEventSetLengthXLengthYChannelNumber(
+								imagestreamer_single_frame, CLASSIFY_IMG_SIZE,
+								CLASSIFY_IMG_SIZE, 1, *hist_packet);
+						//validate frame
+						caerFrameEventValidate(imagestreamer_single_frame,
+								*hist_packet);
+
+						memcpy(caerFrameEventGetPixelArrayUnsafe(imagestreamer_single_frame), classify_hist,
+								CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
+
+					}
+					free(classify_hist);
+
+				}
+
 				// if we want to save the txt
 				if (state->doSaveTxt_hist) {
 					//create classify_txt with desired CLASSIFY_IMG_SIZE (input size of CNN)
 					unsigned char *classify_txt;
-					classify_txt = (unsigned char*) malloc(CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
+					classify_txt = (unsigned char*) malloc(
+							CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE * 1);
 					if (classify_txt == NULL) {
-						caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate classify_txt.");
+						caerLog(CAER_LOG_ERROR,
+								moduleData->moduleSubSystemString,
+								"Failed to allocate classify_txt.");
 						return;
 					}
 					stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP,
-					SIZE_QUADRATIC_MAP, 0, classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, 0, 1);
+					SIZE_QUADRATIC_MAP, 0, classify_txt, CLASSIFY_IMG_SIZE,
+							CLASSIFY_IMG_SIZE, 0, 1);
 
 					//normalize before saving
-					normalize_image(classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
-					if (!save_txt(state->counterTxt, classify_txt, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
-						file_strings_classify, file_string_counter, CLASSIFY_IMG_DIRECTORY, true, MAX_IMG_QTY)) {
-						caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to save image.");
+					normalize_image(classify_txt, CLASSIFY_IMG_SIZE,
+							CLASSIFY_IMG_SIZE);
+					if (!save_txt(state->counterTxt, classify_txt,
+							CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE,
+							file_strings_classify, file_string_counter,
+							CLASSIFY_IMG_DIRECTORY, true, MAX_IMG_QTY)) {
+						caerLog(CAER_LOG_ERROR,
+								moduleData->moduleSubSystemString,
+								"Failed to save image.");
 						return;
 					}
 					free(classify_txt);
@@ -809,41 +962,51 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
 
 				//Create small_img to display the image_map, return it (to main function) in display_img_ptr
 				unsigned char *disp_img;
-				*display_img_ptr = (unsigned char*) malloc(CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE);
+				*display_img_ptr = (unsigned char*) malloc(
+						CLASSIFY_IMG_SIZE * CLASSIFY_IMG_SIZE);
 				if (*display_img_ptr == NULL) {
-					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString, "Failed to allocate *display_img_ptr.");
+					caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
+							"Failed to allocate *display_img_ptr.");
 					return;
 				}
 				disp_img = *display_img_ptr;
 				stbir_resize_uint8(quadratic_image_map, SIZE_QUADRATIC_MAP,
-				SIZE_QUADRATIC_MAP, 0, disp_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE, 0, 1);
+				SIZE_QUADRATIC_MAP, 0, disp_img, CLASSIFY_IMG_SIZE,
+						CLASSIFY_IMG_SIZE, 0, 1);
 				normalize_image(disp_img, CLASSIFY_IMG_SIZE, CLASSIFY_IMG_SIZE);
 
 				// put image into frame
 				/* **** image streamer for hist *** */
 				if (disp_img != NULL) {
 					//get that single frame
-					*imagestreamer = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, CLASSIFY_IMG_SIZE,
-						CLASSIFY_IMG_SIZE, 3);
+					*imagestreamer = caerFrameEventPacketAllocate(1,
+							I16T(moduleData->moduleID), 0, CLASSIFY_IMG_SIZE,
+							CLASSIFY_IMG_SIZE, 3);
 					if (*imagestreamer != NULL) {
-						caerFrameEvent imagestreamer_frame = caerFrameEventPacketGetEvent(*imagestreamer, 0);
+						caerFrameEvent imagestreamer_frame =
+								caerFrameEventPacketGetEvent(*imagestreamer, 0);
 						//now put stuff into the frame
 						int cs, counter;
 						counter = 0;
 						for (int i = 0; i < CLASSIFY_IMG_SIZE; i++) {
 							for (int ys = 0; ys < CLASSIFY_IMG_SIZE; ys++) {
 								cs = i * CLASSIFY_IMG_SIZE + ys;
-								imagestreamer_frame->pixels[counter] = (uint16_t) (disp_img[cs] << 8);
-								imagestreamer_frame->pixels[counter + 1] = (uint16_t) (disp_img[cs] << 8);
-								imagestreamer_frame->pixels[counter + 2] = (uint16_t) (disp_img[cs] << 8);
+								imagestreamer_frame->pixels[counter] =
+										(uint16_t) (disp_img[cs] << 8);
+								imagestreamer_frame->pixels[counter + 1] =
+										(uint16_t) (disp_img[cs] << 8);
+								imagestreamer_frame->pixels[counter + 2] =
+										(uint16_t) (disp_img[cs] << 8);
 								counter += 3;
 							}
 						}
 						//add info to the frame
-						caerFrameEventSetLengthXLengthYChannelNumber(imagestreamer_frame, CLASSIFY_IMG_SIZE,
-							CLASSIFY_IMG_SIZE, 3, *imagestreamer);
+						caerFrameEventSetLengthXLengthYChannelNumber(
+								imagestreamer_frame, CLASSIFY_IMG_SIZE,
+								CLASSIFY_IMG_SIZE, 3, *imagestreamer);
 						//validate frame
-						caerFrameEventValidate(imagestreamer_frame, *imagestreamer);
+						caerFrameEventValidate(imagestreamer_frame,
+								*imagestreamer);
 					}
 
 				}
@@ -878,7 +1041,8 @@ static bool allocateImageMap(imagegeneratorState state, int16_t sourceID) {
 	sshsNode sourceInfoNode = caerMainloopGetSourceInfo(U16T(sourceID));
 	if (sourceInfoNode == NULL) {
 		// This should never happen, but we handle it gracefully.
-		caerLog(CAER_LOG_ERROR, __func__, "Failed to get source info to allocate image map.");
+		caerLog(CAER_LOG_ERROR, __func__,
+				"Failed to get source info to allocate image map.");
 		return (false);
 	}
 

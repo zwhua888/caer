@@ -1,10 +1,6 @@
-/* NullHop Interface for CNN in fpga 
+/* NullHop Interface for CNN in fpga
  *  Author: federico.corradi@inilabs.com
  */
-
-#ifndef __CLASSIFY_H
-#define __CLASSIFY_H
-
 #include <iostream>
 #include <bitset>
 #include <iomanip>
@@ -15,6 +11,13 @@
 #include <stdbool.h>
 #include <math.h>
 #include <ncurses/curses.h>
+#include <cstddef>
+#include <new>
+#include <climits>
+#include <sys/time.h>
+#include <unistd.h>
+#include <semaphore.h>
+#include <signal.h>
 
 #include <sched.h>
 #include <thread>
@@ -27,9 +30,7 @@
 #include <pthread.h>
 #include "dirent.h"
 
-//#ifdef FPGA_MODE
-//#include "./axidmalib.h"
-//#endif
+
 #define Assert(a,b) do { if (!(a)) { printf ( "Assertion failed, file %s, line %d\n", __FILE__, __LINE__); printf ( "Assertion: " #a "\n"); printf ( "ERR: " b "\n"); } } while (0)
 #define NUM_MAC_BLOCKS 128
 #define PATCH_SLACK 512
@@ -42,6 +43,7 @@
 #define MAX_BURST 64
 #define MEM_SIZE 65535
 #define MAX_S2MM_WAIT_COUNTER 10e4
+#define MAX_LAYERS 100
 
 #define safe_fscanf(a,b,c) do{ if(fscanf(a,b,c) == EOF) {fprintf(stderr,"EOF in fscanf at line %d\n",__LINE__); exit(1);} char comment[100];char * dummy = fgets(comment,100,a); } while(0)
 
@@ -132,17 +134,10 @@ typedef struct {
 
 void * readThreadRoutine(void * arg);
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 class zs_driverMonitor {
 
 	unsigned int m_nFracBits;
-	int dha;
-	unsigned int* virtual_address_;
-	unsigned int* virtual_destination_address_;
-	unsigned int* virtual_source_address_;
 
 	// added struct for parameters of each layer (wrt FPGA tb).
 	typedef struct {
@@ -161,41 +156,6 @@ class zs_driverMonitor {
 		int *biases;
 
 	} t_layerParams;
-
-	// added struct (wrt FPGA tb).
-	struct t_waveform {
-		int wf[MAX_WF_SIZE];
-		unsigned int wf_pos;
-		t_waveform(int init = -1) {
-			wf[0] = init;
-			wf_pos = 1;
-		}
-
-		void add(int value, unsigned int nStep, bool forceWrite = false) {
-			Assert(wf_pos < MAX_WF_SIZE, "exceeded WF storage");
-			if (value != 0) {
-				if (wf[wf_pos - 1] < 0 || forceWrite) {
-					wf[wf_pos] = nStep;
-					wf_pos++;
-				}
-			}
-			if (value == 0) {
-				if (wf[wf_pos - 1] > 0 || forceWrite) {
-					wf[wf_pos] = -1 * nStep;
-					wf_pos++;
-				}
-			}
-		}
-
-		void dump(const char *fileName) {
-			FILE *fp;
-			fp = fopen(fileName, "w");
-			for (unsigned int i = 0; i < wf_pos; ++i)
-				fprintf(fp, "%d\n", wf[i]);
-			fclose(fp);
-		}
-
-	};
 
 	t_layerParams * m_layerParams;
 
@@ -241,13 +201,6 @@ class zs_driverMonitor {
 
 	int *m_biases;
 
-	FILE *m_log;
-	FILE *m_axiDebug;
-	FILE *m_logPixels;
-	FILE *m_layerInfo;
-	//FILE *m_readAxiFile;
-	FILE *m_readWordsAxiFile;
-
 	int *m_initConfig;bool m_poolingEnabled, m_reluEnabled, m_encodingEnabled;bool m_imageCompressionEnabled;
 	int instruction[2];
 	int old_row;
@@ -268,8 +221,6 @@ class zs_driverMonitor {
 
 	unsigned int m_idpBuffer_pos;
 
-	pthread_t m_readThread;
-
 	//int dh;
 	off_t offset_control, offset_read, offset_write;
 	unsigned int current_control, current_read, current_write;
@@ -282,23 +233,21 @@ class zs_driverMonitor {
 	unsigned int max_wk;
 	unsigned int max_hk;
 	unsigned int m_currentInitStep;
-	unsigned int m_currentLayer;
 	unsigned int m_numLayers;
 
 	unsigned int error_counter;
 	unsigned int error_on_SMs;
 
 	int m_outputLayerPadding;
-	int m_inputLayerPadding;bool m_activeProcessing;bool m_sent_start_pulse;bool m_sent_image_ready;
+	int m_inputLayerPadding;
+	bool m_sent_start_pulse;
+	bool m_sent_image_ready;
 
 	char m_baseFileName[100];
 
-	int generatedSM;
-	int SMpixels[16];
 	unsigned int tempPos;bool bottomRow;
 	unsigned int shift;
 	unsigned int chIdx, xPos, yPos;
-	int outputGroundTruthPixel;
 	int maxPixel;
 
 	int m_ip1_params[IP1_IP_SIZE * IP1_OP_SIZE + IP1_OP_SIZE];
@@ -306,20 +255,41 @@ class zs_driverMonitor {
 	int m_fc1_output[IP1_OP_SIZE];
 	int m_fc2_output[IP2_OP_SIZE];
 
+	long time_for_eval_fc;
+	long time_for_eval_layer[MAX_LAYERS];
+	long time_for_all;
+
+	// added struct (wrt FPGA tb).
+	/*typedef struct {
+		int wf[MAX_WF_SIZE];
+	} t_waveform;*/
+
 public:
 
+	int dha;
+	unsigned int* virtual_address_;
+	unsigned int* virtual_destination_address_;
+	unsigned int* virtual_source_address_;
+
+	sem_t signal_done;
+
+	struct timeval start, end;
+	long mtime, secs, usecs;
+	unsigned int counter_l;
+
+	unsigned int m_currentLayer;
+	bool m_activeProcessing;
+	bool threadRunning;
+	pthread_t m_readThread;
+
+
+	unsigned long long n_clkCycles = 0;
 	t_input_sigs inputSigsInternal;
-	FILE *m_readAxiFile;
 
-	t_waveform m_compute_wfs[8];
-	t_waveform m_writeKernel_wf;
-	t_waveform m_writePixel_wf;
-	t_waveform m_writeBias_wf;
-	t_waveform m_writeConfig_wf;
-	t_waveform m_readPixel_wf;
+	//t_waveform m_compute_wfs; // weird behaviour
 
-	t_output_sigs *output_sigs;
-	t_input_sigs *input_sigs;
+	volatile t_output_sigs *output_sigs;
+	volatile t_input_sigs *input_sigs;
 	friend void * readThreadRoutine(void *);
 
 	enum CONFIG_TYPE {
@@ -347,36 +317,31 @@ public:
 	void load_single_FC_layer(const char *fileName, int * ip_params,
 			unsigned int paramSize);
 	void evaluateFCLayers();
-	void dumpFCLayer(const char *fileName, int *fc, unsigned int len);
-
 	int ipow(int base, int exp);
+
 
 	zs_driverMonitor() {
 		m_currentLayer = 0;
 		m_layerParams = NULL;
 		m_currentInputPass = 0;
 
+		mtime = 0;
+		secs = 0 ;
+		usecs = 0;
+		time_for_eval_fc = -1;
+		for (int i=0; i <= MAX_LAYERS ; i++){
+			time_for_eval_layer[i] = -1;
+		}
+		time_for_all = -1;
+		counter_l = 0;
+
 		input_sigs = new t_input_sigs;
 		output_sigs = new t_output_sigs;
-		memset(input_sigs, 0, sizeof(t_input_sigs));
+		memset((void *)input_sigs, 0, sizeof(t_input_sigs));
 		memset((void *) output_sigs, 0, sizeof(t_output_sigs));
 
 		m_activeProcessing = false;
 		m_nFracBits = 8;
-		m_log = fopen("log", "w");
-		m_logPixels = fopen("logPixels", "w");
-		//m_axiDebug = fopen("axiDebug","a");
-		m_layerInfo = fopen("zs_layerInfo", "w");
-		if (access("readAxiFile", F_OK) != -1) {
-			if (remove("readAxiFile") != 0) {
-				printf("Error deleting readAxiFile.");
-			}
-		}
-		if (access("readWordsAxiFile", F_OK) != -1) {
-			if (remove("readWordsAxiFile") != 0) {
-				printf("Error deleting readWordsAxiFile.");
-			}
-		}
 
 		m_initConfig = new int[(int) (config_last)];
 
@@ -388,9 +353,17 @@ public:
 		virtual_source_address_ = (unsigned int *) mmap(NULL, 65535,
 		PROT_READ | PROT_WRITE, MAP_SHARED, dha, src_addr_offset_); // Memory map source address
 
+		initializeInternalVariables();
+		readNetwork("/home/root/network_face");
+
 	}
 
-	void launchThread();
+	double getTimeForAll(){
+		return(this->time_for_all);
+	}
+    void setTotalTime(double timer);
+	int launchThread();
+	void closeThread();
 	int setCurrentLayer(unsigned int layerIndex);
 	void readNetwork(const char *fileName);
 	void checkMarker(FILE *fp, const char * marker);
@@ -404,17 +377,18 @@ public:
 	void initializeKernelArray(t_layerParams & layerParam);
 	void initializeConfigArray();
 
-	//void initAxiMemory();
 	void dma_set_(unsigned int* dma_virtual_address, int offset,
 			unsigned int value);
 	unsigned int dma_get_(unsigned int* dma_virtual_address, int offset);
-	void resetAxiBus();bool waitValidAxiDataToRead_(int wordsNumber);
+	void resetAxiBus();
+	void waitValidAxiDataToRead_(int wordsNumber);
 	void initNet();
+	void setInternalVariables();
 
 	void dma_mm2s_sync_(unsigned int* dma_virtual_address);
 	void dma_s2mm_sync_(unsigned int* dma_virtual_address);
-	void dma_s2mm_status_(unsigned int* dma_virtual_address);
-	void dma_mm2s_status_(unsigned int* dma_virtual_address);
+	int dma_s2mm_status_(unsigned int* dma_virtual_address);
+	int dma_mm2s_status_(unsigned int* dma_virtual_address);
 	void memdump_(char* virtual_address, int byte_count);
 	void hexDump_(char *desc, void *addr, int len);
 
@@ -423,8 +397,7 @@ public:
 	void stopS2MM_(void);
 	void memdump_checking_(char* virtual_address, int byte_count);
 
-	~zs_driverMonitor() {
-	}
+	~zs_driverMonitor() { }
 
 	int getGroundTruthPixel(unsigned int outputChannel, int xPos, int yPos,
 			int & fullResResult, bool debug = false);
@@ -436,30 +409,26 @@ public:
 	void writeToAxi();
 	void axiWriteCommit();
 	unsigned int reverseInt(unsigned int src);
-	void readFromAxi();bool matchToPatch(int output_pixel, int pixel_ch,
+	void readFromAxi();
+	bool matchToPatch(int output_pixel, int pixel_ch,
 			int pixel_xpos, int pixel_ypos, unsigned int mac_index);
-	void generateSMandPixels(unsigned int outputHeight,
-			unsigned int outputWidth);
-	void phase1_step();
 	void phase2_step();
+	void pixel_step();
 	void dumpImage();
-	void dumpWaveforms(unsigned int currentStep);
 	double getSparsity();
 	int processingLoop(unsigned int currentStep);
-	void dumpKernels();
-	void dumpPixels(const char * fileName);
 	int runLoop(void);
 
-	void file_set();
-	char * file_get();
+	int file_set(uint8_t * picture);
+
+	void printStatus();
+	int loadImage();
+	int threadExists();
+
 
 private:
 	char * file_i;
 
 };
 
-#endif
 
-#ifdef __cplusplus
-}
-#endif
