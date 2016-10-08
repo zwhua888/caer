@@ -354,7 +354,7 @@ public:
 		PROT_READ | PROT_WRITE, MAP_SHARED, dha, src_addr_offset_); // Memory map source address
 
 		initializeInternalVariables();
-		readNetwork("/home/root/network_face");
+		readNetwork("/home/root/sd/caer-bin/network_face");
 
 	}
 
@@ -424,7 +424,7 @@ public:
 	void printStatus();
 	int loadImage();
 	int threadExists();
-
+	void sw_reset();
 
 private:
 	char * file_i;

@@ -3,19 +3,39 @@
  */
 #include "classify.hpp"
 #include <fstream>
+#include <iostream>
 
 int zs_driverMonitor::file_set(uint8_t * picture) {
 
 
+	std::ofstream image_file;
+	image_file.open("input_images.txt", std::ios::app);
+	image_file << "#INPUT IMAGE";
 	int counter = 0;
+	int tmp_img = 0;
 	for (unsigned int i = 0; i < 1; ++i) {
 		for (unsigned int j = 0; j < 36; ++j) {
 			for (unsigned int k = 0; k < 36; ++k) {
-				this->m_layerParams[0].image[i][j][k] = picture[counter] * 32;
+				tmp_img = picture[counter] * 256;
+				if(tmp_img == 0){
+					this->m_layerParams[0].image[i][j][k] = 0 + rand() % 3;
+				}else{
+					if(tmp_img > 32767 || tmp_img < -32768){
+						if(tmp_img > 32768){
+							this->m_layerParams[0].image[i][j][k] = 32767;
+						}else{
+							this->m_layerParams[0].image[i][j][k] = -32768;
+						}
+					}else{
+						this->m_layerParams[0].image[i][j][k] = tmp_img;
+					}
+				}
 				counter += 1;
+				image_file << this->m_layerParams[0].image[i][j][k];
 			}
 		}
 	}
+	image_file.close();
 	m_image = this->m_layerParams[0].image;
 
 	this->n_clkCycles = 0;
@@ -30,7 +50,6 @@ int zs_driverMonitor::file_set(uint8_t * picture) {
 		}
 	}
 
-	//sem_wait(&signal_done);
 	this->printStatus();
 
 	return (0);
@@ -78,18 +97,9 @@ void zs_driverMonitor::waitValidAxiDataToRead_(int wordsNumber) {
 void zs_driverMonitor::dma_mm2s_sync_(unsigned int* dma_virtual_address) {
 	unsigned int mm2s_status = dma_get_(dma_virtual_address,
 	MM2S_STATUS_REGISTER_);
-	int counter = 0;
+
 	while (!(mm2s_status & 1 << 12) || !(mm2s_status & 1 << 1)) {
 		mm2s_status = dma_get_(dma_virtual_address, MM2S_STATUS_REGISTER_);
-		counter +=1;
-		if(counter > 1000000){
-			//printf("################# write axi stuck RESETTTT\n");
-			m_completedImageWrite = true;
-			m_completedKernelWrite = true;
-			m_completedConfigWrite = true;
-			m_completedBiasWrite = true;
-			break;
-		}
 	}
 }
 
@@ -97,15 +107,9 @@ void zs_driverMonitor::dma_s2mm_sync_(unsigned int* dma_virtual_address) {
 	unsigned int s2mm_status = dma_get_(dma_virtual_address,
 	S2MM_STATUS_REGISTER_);
 
-	int counter = 0;
 	while (!(s2mm_status & (1 << 12)) || !(s2mm_status & (1 << 1))) {
 		s2mm_status = dma_get_(dma_virtual_address, S2MM_STATUS_REGISTER_);
-		//printf("s2mm_status\n");
-		counter +=1;
-		if(counter > 1000000){
-			//printf("################# read axi stuck RESETTTT\n");
-			m_gotAllPixels = true; break;
-		}
+
 	}
 }
 
@@ -325,9 +329,9 @@ void zs_driverMonitor::closeThread() {
 }
 
 void zs_driverMonitor::loadFCParams() {
-	load_single_FC_layer("ip1_params", m_ip1_params,
+	load_single_FC_layer("/home/root/sd/caer-bin/ip1_params", m_ip1_params,
 			sizeof(m_ip1_params) / sizeof(m_ip1_params[0]));
-	load_single_FC_layer("ip2_params", m_ip2_params,
+	load_single_FC_layer("/home/root/sd/caer-bin/ip2_params", m_ip2_params,
 			sizeof(m_ip2_params) / sizeof(m_ip2_params[0]));
 
 }
@@ -373,7 +377,7 @@ void zs_driverMonitor::evaluateFCLayers() {
 						+ i];
 		m_fc1_output[i] = m_fc1_output[i] > 0 ? m_fc1_output[i] : 0;
 		if(i==IP1_OP_SIZE-1){
-			printf(" m_fc1_output[%d] %d\n", i, m_fc1_output[i]);
+			fprintf(stderr, "m_fc1_output[%d] %d\n", i, m_fc1_output[i]);
 		}
 	}
 
@@ -387,11 +391,25 @@ void zs_driverMonitor::evaluateFCLayers() {
 
 		m_fc2_output[i] = (m_fc2_output[i] / 256)
 				+ m_ip2_params[IP2_OP_SIZE * IP1_OP_SIZE + i];
-		//if(i==IP2_OP_SIZE-1){
-			printf(" m_fc2_output[%d] %d\n", i, m_fc2_output[i]);
-		//}
+
+		fprintf(stderr, " m_fc2_output[%d] %d\n", i, m_fc2_output[i]);
 	}
 
+		//for face net only
+	if( m_fc2_output[1] > m_fc2_output[0]){
+		fprintf(stderr, "\nFACE DETECTED\n");
+		system("echo 1 >> /dev/ttyUSB0");
+	}
+
+}
+
+void zs_driverMonitor::sw_reset(){
+        //resetAxiBus();
+        virtual_source_address_[0]= 0;
+        virtual_source_address_[1]= 0x80000000;
+        virtual_source_address_[2]= 0;
+        virtual_source_address_[3]= 0;
+        writeAxiCommit_(2, 0);
 }
 
 int zs_driverMonitor::ipow(int base, int exp) {
@@ -1055,13 +1073,6 @@ void zs_driverMonitor::readFromAxi() {
 		output_sigs->s_output_pixel_stream_valid =
 				(virtual_destination_address_[i + 1] & 3);
 
-		if (output_sigs->s_output_pixel_stream == 0
-				&& output_sigs->s_output_pixel_stream_valid == 0
-				&& m_currentLayer == m_numLayers) {
-
-			stopS2MM_();
-			//pthread_exit(NULL); // finito
-		}
 		pixel_step(); // get pixels and decode
 
 	}
@@ -1157,9 +1168,13 @@ void zs_driverMonitor::pixel_step() {
 				//int chIdxa = chIdx;
 				//int yPosa = yPos;
 				//int xPosa = xPos;
-				m_outputImage[chIdx][yPos][xPos] = outputPixel;
+				if(outputPixel == 0){
+					m_outputImage[chIdx][yPos][xPos] =  0 + rand() % 3;
+				}else{
+					m_outputImage[chIdx][yPos][xPos] = outputPixel;
+				}
 
-				if ((m_currentDecodeIndex + 16)
+				if  ((m_currentDecodeIndex + 16)
 								== (int) (outputHeight * outputWidth * m_nchOut)) {
 					m_gotAllPixels = true;
 				}
@@ -1471,20 +1486,20 @@ int zs_driverMonitor::processingLoop(unsigned int currentStep) {
 void zs_driverMonitor::printStatus() {
 
 
-	printf("######################################\n");
+	fprintf(stderr,"\n######################################\n");
 
 	for(int h=0; h <  m_numLayers; h++){
-		printf("TIME FOR LAYER %d NULLHOP: %ld ms\n", h,time_for_eval_layer[h]);
+		fprintf(stderr,"TIME FOR LAYER %d NULLHOP: %ld ms\n", h,time_for_eval_layer[h]);
 	}
 
-	printf("TIME FOR FC on armv7 : %ld ms\n", time_for_eval_fc);
+	fprintf(stderr,"TIME FOR FC on armv7 : %ld ms\n", time_for_eval_fc);
 
 	fprintf(stderr, "\n *** \n Second FC layer output: \n");
 	for (unsigned int i = 0; i < IP2_OP_SIZE; i++) {
 		fprintf(stderr, "m_fc2_output[%d]: %d \n", i, m_fc2_output[i]);
 	}
 
-	printf("\n");
+	fprintf(stderr,"\n");
 
 }
 
@@ -1494,7 +1509,7 @@ void * readThreadRoutine(void * arg) {
 	while (1) {
 		try{
 		zsDM->readFromAxi();
-		usleep(5);
+		usleep(15);
 		}catch(const char *p){
 			std::cout<< "caught" << p << "\n";
 		}

@@ -249,7 +249,7 @@ static bool mainloop_1(void) {
 	caerFrameEventPacket imagestreamer_frame = NULL;
 	caerFrameEventPacket hist_packet = NULL;
 
-#if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT)
+#if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT) 
 	unsigned char ** frame_img_ptr = calloc(sizeof(unsigned char *), 1);
 	// generate images
 	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, frame, &imagestreamer, &imagestreamer_frame, frame_img_ptr, &hist_packet);
@@ -263,7 +263,7 @@ static bool mainloop_1(void) {
 	// External clients connect to cAER, and we send them the data.
 	// WARNING: slow clients can dramatically slow this and the whole
 	// processing pipeline down!
-	//caerOutputNetTCPServer(8, 1, polarity);
+	caerOutputNetTCPServer(8, 1, polarity);
 
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
 	//caerOutputNetUDP(9, 1, polarity); //, frame, imu, special);
@@ -352,7 +352,7 @@ int main(int argc, char **argv) {
 	caerLogInit();
 
 	// Daemonize the application (run in background).
-	//caerDaemonize();
+	caerDaemonize();
 
 	// Initialize visualizer framework (load fonts etc.).
 #ifdef ENABLE_VISUALIZER
