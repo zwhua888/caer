@@ -329,9 +329,9 @@ void zs_driverMonitor::closeThread() {
 }
 
 void zs_driverMonitor::loadFCParams() {
-	load_single_FC_layer("/home/root/sd/caer-bin/ip1_params", m_ip1_params,
+	load_single_FC_layer(IP1_PARAMS_FILE, m_ip1_params,
 			sizeof(m_ip1_params) / sizeof(m_ip1_params[0]));
-	load_single_FC_layer("/home/root/sd/caer-bin/ip2_params", m_ip2_params,
+	load_single_FC_layer(IP2_PARAMS_FILE, m_ip2_params,
 			sizeof(m_ip2_params) / sizeof(m_ip2_params[0]));
 
 }

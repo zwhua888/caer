@@ -10,7 +10,8 @@
 #include <sys/mman.h>
 #include <stdbool.h>
 #include <math.h>
-#include <ncurses/curses.h>
+//#include <ncurses/curses.h>
+#include <curses.h>
 #include <cstddef>
 #include <new>
 #include <climits>
@@ -30,6 +31,7 @@
 #include <pthread.h>
 #include "dirent.h"
 
+#include "settings.h"
 
 #define Assert(a,b) do { if (!(a)) { printf ( "Assertion failed, file %s, line %d\n", __FILE__, __LINE__); printf ( "Assertion: " #a "\n"); printf ( "ERR: " b "\n"); } } while (0)
 #define NUM_MAC_BLOCKS 128
@@ -354,7 +356,7 @@ public:
 		PROT_READ | PROT_WRITE, MAP_SHARED, dha, src_addr_offset_); // Memory map source address
 
 		initializeInternalVariables();
-		readNetwork("/home/root/sd/caer-bin/network_face");
+		readNetwork(NETWORK_FILE);
 
 	}
 
