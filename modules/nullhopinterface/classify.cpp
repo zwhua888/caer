@@ -5,49 +5,40 @@
 #include <fstream>
 #include <iostream>
 
-int zs_driverMonitor::file_set(uint8_t * picture) {
+int zs_driverMonitor::file_set(uint16_t * picture) {
 
-
-	std::ofstream image_file;
-	image_file.open("input_images.txt", std::ios::app);
-	image_file << "#INPUT IMAGE";
+	//std::ofstream image_file;
+	//image_file.open("input_images.txt", std::ios::app);
+	//image_file << "#INPUT IMAGE\n";
 	int counter = 0;
 	int tmp_img = 0;
 	for (unsigned int i = 0; i < 1; ++i) {
 		for (unsigned int j = 0; j < 36; ++j) {
 			for (unsigned int k = 0; k < 36; ++k) {
 				tmp_img = picture[counter] * 256;
-				if(tmp_img == 0){
-					this->m_layerParams[0].image[i][j][k] = 0 + rand() % 3;
-				}else{
-					if(tmp_img > 32767 || tmp_img < -32768){
-						if(tmp_img > 32768){
-							this->m_layerParams[0].image[i][j][k] = 32767;
-						}else{
-							this->m_layerParams[0].image[i][j][k] = -32768;
-						}
-					}else{
-						this->m_layerParams[0].image[i][j][k] = tmp_img;
+				if (tmp_img > 32767 || tmp_img < -32768) {
+					if (tmp_img > 32767) {
+						this->m_layerParams[0].image[i][j][k] = (int) 32767*0.00390625;
+					} else {
+						this->m_layerParams[0].image[i][j][k] =(int) -32768*0.00390625;
 					}
+				} else {
+					this->m_layerParams[0].image[i][j][k] = (int) tmp_img*0.00390625;
 				}
 				counter += 1;
-				image_file << this->m_layerParams[0].image[i][j][k];
 			}
 		}
 	}
-	image_file.close();
 	m_image = this->m_layerParams[0].image;
 
 	this->n_clkCycles = 0;
-	while (1) {
-		if (this->processingLoop(this->n_clkCycles) == FINISHED) {
 
-			this->n_clkCycles = 0;
-			this->m_activeProcessing = false;
-			this->m_currentLayer = 0;
+	while (this->processingLoop(this->n_clkCycles) == FINISHED) {
 
-			break;
-		}
+		this->n_clkCycles = 0;
+		this->m_activeProcessing = false;
+		this->m_currentLayer = 0;
+
 	}
 
 	this->printStatus();
@@ -345,26 +336,27 @@ void zs_driverMonitor::load_single_FC_layer(const char *fileName,
 }
 
 void zs_driverMonitor::evaluateFCLayers() {
-	unsigned int idx_tot_fc1=0;
-	int max_height = (m_hinMax-m_hk+1);
+	unsigned int idx_tot_fc1 = 0;
+	int max_height = (m_hinMax - m_hk + 1);
 
-	if(m_poolingEnabled){
-		max_height/=2;
+	if (m_poolingEnabled) {
+		max_height /= 2;
 	}
-	int max_width = (m_imageWidth-m_wk+1);
-	if(m_poolingEnabled){
-		max_width/=2;
+	int max_width = (m_imageWidth - m_wk + 1);
+	if (m_poolingEnabled) {
+		max_width /= 2;
 	}
 
 	/*int m_nchOuta = m_nchOut;
-	int max_widtha = max_width;
-	int max_heighta = max_height;*/
+	 int max_widtha = max_width;
+	 int max_heighta = max_height;*/
 	for (int i = 0; i < IP1_OP_SIZE; ++i) {
 		m_fc1_output[i] = 0;
 		for (int j = 0; j < m_nchOut; ++j) { //m_nchIn; ++j) { // m_nchOut
-			for (int k = 0; k < max_width; ++k) {//m_hinMax; ++k) { //max_width
-				for (int l = 0; l < max_height; ++l) {//m_imageWidth //max_height
-					m_fc1_output[i] += m_ip1_params[idx_tot_fc1] * m_image[j][k][l];
+			for (int k = 0; k < max_width; ++k) { //m_hinMax; ++k) { //max_width
+				for (int l = 0; l < max_height; ++l) { //m_imageWidth //max_height
+					m_fc1_output[i] += m_ip1_params[idx_tot_fc1]
+							* m_image[j][k][l];
 					//printf("m_nchIn %d m_hinMax %d m_imageWidth %d, m_poolingEnabled %d \n", m_nchOut, max_width, max_height, m_poolingEnabled);
 					//printf(" m_ip1_params[%d] %d\n",idx_tot_fc1, m_ip1_params[idx_tot_fc1]);
 					idx_tot_fc1++;
@@ -376,14 +368,14 @@ void zs_driverMonitor::evaluateFCLayers() {
 				+ m_ip1_params[m_nchIn * m_hinMax * m_imageWidth * IP1_OP_SIZE
 						+ i];
 		m_fc1_output[i] = m_fc1_output[i] > 0 ? m_fc1_output[i] : 0;
-		if(i==IP1_OP_SIZE-1){
+		if (i == IP1_OP_SIZE - 1) {
 			fprintf(stderr, "m_fc1_output[%d] %d\n", i, m_fc1_output[i]);
 		}
 	}
 
 	for (int i = 0; i < IP2_OP_SIZE; ++i) {
 		m_fc2_output[i] = 0;
-		for (int j = 0; j < IP1_OP_SIZE; ++j){
+		for (int j = 0; j < IP1_OP_SIZE; ++j) {
 			m_fc2_output[i] += m_ip2_params[i * IP1_OP_SIZE + j]
 					* m_fc1_output[j];
 			//printf("m_ip2_params[%d * %d + %d] %d\n", i, IP1_OP_SIZE, j,  m_ip2_params[i * IP1_OP_SIZE + j]);
@@ -395,21 +387,21 @@ void zs_driverMonitor::evaluateFCLayers() {
 		fprintf(stderr, " m_fc2_output[%d] %d\n", i, m_fc2_output[i]);
 	}
 
-		//for face net only
-	if( m_fc2_output[1] > m_fc2_output[0]){
+	//for face net only
+	if (m_fc2_output[1] > m_fc2_output[0]) {
 		fprintf(stderr, "\nFACE DETECTED\n");
 		system("echo 1 >> /dev/ttyUSB0");
 	}
 
 }
 
-void zs_driverMonitor::sw_reset(){
-        //resetAxiBus();
-        virtual_source_address_[0]= 0;
-        virtual_source_address_[1]= 0x80000000;
-        virtual_source_address_[2]= 0;
-        virtual_source_address_[3]= 0;
-        writeAxiCommit_(2, 0);
+void zs_driverMonitor::sw_reset() {
+	//resetAxiBus();
+	virtual_source_address_[0] = 0;
+	virtual_source_address_[1] = 0x80000000;
+	virtual_source_address_[2] = 0;
+	virtual_source_address_[3] = 0;
+	writeAxiCommit_(2, 0);
 }
 
 int zs_driverMonitor::ipow(int base, int exp) {
@@ -1062,7 +1054,7 @@ void zs_driverMonitor::stopS2MM_() {
 void zs_driverMonitor::readFromAxi() {
 
 	//printf("sem %d\n", signal_done);
-	if(m_gotAllPixels){
+	if (m_gotAllPixels) {
 		return;
 	}
 	waitValidAxiDataToRead_(MAX_BURST);
@@ -1080,11 +1072,13 @@ void zs_driverMonitor::readFromAxi() {
 }
 
 void zs_driverMonitor::pixel_step() {
+
+	//printf("inside pixel_step, m_gotAllPixels: %d \n",m_gotAllPixels);
+
 	if (m_gotAllPixels) {
 		return;
 	}
 
-	bool m_poolingEnableda = m_poolingEnabled;
 	unsigned int unpooled_outputHeight = (m_hinMax - m_hk + 1
 			+ m_inputLayerPadding * 2);
 	unsigned int unpooled_outputWidth = m_imageWidth - m_wk + 1
@@ -1097,7 +1091,7 @@ void zs_driverMonitor::pixel_step() {
 		outputWidth /= 2;
 	}
 
-	if (output_sigs->s_output_pixel_stream_valid) {
+	if ((output_sigs->s_output_pixel_stream_valid) != 0) {
 
 		for (unsigned int decode_iter = 0; decode_iter < 2; ++decode_iter) {
 			int decoded_value = (
@@ -1106,21 +1100,28 @@ void zs_driverMonitor::pixel_step() {
 									& (ipow(2, 16) - 1) :
 							(output_sigs->s_output_pixel_stream >> 16));
 
-			if ((m_currentDecodeSM == 0) & (m_encodingEnabled == 1)) // when encoding is enabled. Only when SM is all zeros, i.e. when all pixels have been read.
+			if ((m_currentDecodeSM == 0) && (m_encodingEnabled == 1)) // when encoding is enabled. Only when SM is all zeros, i.e. when all pixels have been read.
 					{
 				m_currentDecodeSM = decoded_value;
 				m_currentDecodeIndex += 16; // initialized to -16, here put back to zero
-				tempPos = m_currentDecodeIndex;
 
-				std::bitset<16> y(m_currentDecodeSM);
+				if (((m_currentDecodeIndex + 16)
+						== ((outputHeight * outputWidth * m_nchOut)))
+						&& (m_currentDecodeSM == 0)) {
+					printf("got all layer pixels (SM all zeros) %d \n",
+							outputHeight * outputWidth * m_nchOut);
+					m_gotAllPixels = true;
+					//  *sw_resetn = 0; // TODO: try to reset fpga here
+					return;
+				}
+
+				tempPos = m_currentDecodeIndex;
 
 			}
 
 			else // if SM has any entry non zero, both for encoding enabled or disabled.
 			{
-
-				if ((m_currentDecodeSM == 0) & (m_encodingEnabled == 0)) // only when SM is all zeros, when encoding is DISABLED.
-						{
+				if ((m_currentDecodeSM == 0) && (m_encodingEnabled == 0)) { // only when SM is all zeros, when encoding is DISABLED.
 					m_currentDecodeIndex += 16;
 					tempPos = m_currentDecodeIndex;
 					m_currentDecodeSM = (ipow(2, 16) - 1);
@@ -1135,10 +1136,16 @@ void zs_driverMonitor::pixel_step() {
 
 				unsigned int MSB_one = 0;
 
+				//printf("before shifthng (1 << MSB_one) %d\n", (1 << MSB_one) );
+
 				while (!((1 << MSB_one) & m_currentDecodeSM))
 					++MSB_one;
 
+				//printf("after shifting (1 << MSB_one) %d\n", (1 << MSB_one) );
+
 				m_currentDecodeSM &= ~((1 << MSB_one));
+
+				//printf("(1 << MSB_one) %d,m_currentDecodeSM %d \n", (1 << MSB_one), m_currentDecodeSM );
 
 				tempPos = m_currentDecodeIndex + MSB_one;
 
@@ -1164,25 +1171,23 @@ void zs_driverMonitor::pixel_step() {
 				yPos = tempPos * (m_poolingEnabled ? 1 : 2)
 						+ (bottomRow ? 1 : 0);
 
-				//printf("chIdx %d  yPos %d  xPos%d\n", chIdx, yPos, xPos);
-				//int chIdxa = chIdx;
-				//int yPosa = yPos;
-				//int xPosa = xPos;
-				if(outputPixel == 0){
-					m_outputImage[chIdx][yPos][xPos] =  0 + rand() % 3;
-				}else{
-					m_outputImage[chIdx][yPos][xPos] = outputPixel;
-				}
+				m_outputImage[chIdx][yPos][xPos] = outputPixel;
 
-				if  ((m_currentDecodeIndex + 16)
-								== (int) (outputHeight * outputWidth * m_nchOut)) {
+				if ((m_currentDecodeSM == 0)
+						&& ((m_currentDecodeIndex + 16)
+								== (outputHeight * outputWidth * m_nchOut))) {
+					printf("got all layer pixels %d \n",
+							outputHeight * outputWidth * m_nchOut);
 					m_gotAllPixels = true;
+
 				}
 
 			}
-			if (output_sigs->s_output_pixel_stream_valid == 1)
+			if (output_sigs->s_output_pixel_stream_valid == 1) {
 				break;
+			}
 		}
+
 	}
 
 }
@@ -1325,7 +1330,7 @@ void zs_driverMonitor::phase2_step() {
 					m_completedImageWrite = true;
 			}
 
-			else if ((m_pixelArrayWritePos == (m_nPixelsArray - 1))&& done) {
+			else if ((m_pixelArrayWritePos == (m_nPixelsArray - 1)) && done) {
 				writePixels(m_pixelArray[m_pixelArrayWritePos], 0, false,
 						instruction);
 				memset(instruction, 0, 2 * sizeof(int));
@@ -1417,14 +1422,13 @@ void zs_driverMonitor::phase2_step() {
 		axiWriteCommit();
 }
 
-int zs_driverMonitor::threadExists(){
-	if(pthread_kill(m_readThread, 0) != 0){
+int zs_driverMonitor::threadExists() {
+	if (pthread_kill(m_readThread, 0) != 0) {
 		launchThread();
 	}
 }
 
 int zs_driverMonitor::processingLoop(unsigned int currentStep) {
-
 
 	if (currentStep == 0) {
 		gettimeofday(&start, NULL);
@@ -1451,9 +1455,7 @@ int zs_driverMonitor::processingLoop(unsigned int currentStep) {
 
 	}
 
-
 	phase2_step();
-
 
 	m_activeProcessing = true;
 
@@ -1485,21 +1487,21 @@ int zs_driverMonitor::processingLoop(unsigned int currentStep) {
 
 void zs_driverMonitor::printStatus() {
 
+	fprintf(stderr, "\n######################################\n");
 
-	fprintf(stderr,"\n######################################\n");
-
-	for(int h=0; h <  m_numLayers; h++){
-		fprintf(stderr,"TIME FOR LAYER %d NULLHOP: %ld ms\n", h,time_for_eval_layer[h]);
+	for (int h = 0; h < m_numLayers; h++) {
+		fprintf(stderr, "TIME FOR LAYER %d NULLHOP: %ld ms\n", h,
+				time_for_eval_layer[h]);
 	}
 
-	fprintf(stderr,"TIME FOR FC on armv7 : %ld ms\n", time_for_eval_fc);
+	fprintf(stderr, "TIME FOR FC on armv7 : %ld ms\n", time_for_eval_fc);
 
 	fprintf(stderr, "\n *** \n Second FC layer output: \n");
 	for (unsigned int i = 0; i < IP2_OP_SIZE; i++) {
 		fprintf(stderr, "m_fc2_output[%d]: %d \n", i, m_fc2_output[i]);
 	}
 
-	fprintf(stderr,"\n");
+	fprintf(stderr, "\n");
 
 }
 
@@ -1507,11 +1509,11 @@ void * readThreadRoutine(void * arg) {
 
 	zs_driverMonitor *zsDM = ((zs_driverMonitor *) arg);
 	while (1) {
-		try{
-		zsDM->readFromAxi();
-		usleep(15);
-		}catch(const char *p){
-			std::cout<< "caught" << p << "\n";
+		try {
+			zsDM->readFromAxi();
+			usleep(15);
+		} catch (const char *p) {
+			std::cout << "caught" << p << "\n";
 		}
 	}
 

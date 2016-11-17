@@ -15,7 +15,7 @@ typedef struct zs_driverMonitor zs_driverMonitor;
 
 zs_driverMonitor* newzs_driverMonitor();
 
-void zs_driverMonitor_file_set(zs_driverMonitor* v, uint8_t * picture);
+void zs_driverMonitor_file_set(zs_driverMonitor* v, uint16_t * picture);
 
 int zs_driverMonitor_threadExists(zs_driverMonitor* v);
 

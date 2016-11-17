@@ -87,7 +87,7 @@ static void caerNullHopWrapperRun(caerModuleData moduleData, size_t argsNumber,
 
 		zs_driverMonitor_threadExists(state->cpp_class);
 
-		uint8_t *picture = (uint8_t *) caerFrameEventGetPixelArrayUnsafe(caerFrameIteratorElement);
+		uint16_t *picture = (uint16_t *) caerFrameEventGetPixelArrayUnsafe(caerFrameIteratorElement);
 
 		zs_driverMonitor_file_set(state->cpp_class, picture);
 

@@ -252,9 +252,7 @@ static bool mainloop_1(void) {
 #if defined(DAVISFX2) || defined(DAVISFX3) || defined(ENABLE_FILE_INPUT) || defined(ENABLE_NETWORK_INPUT) 
 	unsigned char ** frame_img_ptr = calloc(sizeof(unsigned char *), 1);
 	// generate images
-	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, frame, &imagestreamer, &imagestreamer_frame, frame_img_ptr, &hist_packet);
-#else
-	caerImageGenerator(20, polarity, file_strings_classify, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, display_img_ptr, NULL, &imagestreamer, NULL, NULL, &hist_packet);
+	caerImageGenerator(20, polarity, (int) MAX_IMG_QTY, CLASSIFY_IMG_SIZE, &hist_packet);
 #endif
 #endif
 
@@ -352,7 +350,7 @@ int main(int argc, char **argv) {
 	caerLogInit();
 
 	// Daemonize the application (run in background).
-	caerDaemonize();
+	//caerDaemonize();
 
 	// Initialize visualizer framework (load fonts etc.).
 #ifdef ENABLE_VISUALIZER

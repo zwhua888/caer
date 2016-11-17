@@ -10,8 +10,8 @@
 #include <sys/mman.h>
 #include <stdbool.h>
 #include <math.h>
-//#include <ncurses/curses.h>
-#include <curses.h>
+#include <ncurses/curses.h>
+//#include <curses.h>
 #include <cstddef>
 #include <new>
 #include <climits>
@@ -421,7 +421,7 @@ public:
 	int processingLoop(unsigned int currentStep);
 	int runLoop(void);
 
-	int file_set(uint8_t * picture);
+	int file_set(uint16_t * picture);
 
 	void printStatus();
 	int loadImage();

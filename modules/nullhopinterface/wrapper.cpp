@@ -22,7 +22,7 @@ int zs_driverMonitor_launchThread(zs_driverMonitor* v){
 	return v->launchThread();
 }
 
-void zs_driverMonitor_file_set(zs_driverMonitor* v, uint8_t * picture) {
+void zs_driverMonitor_file_set(zs_driverMonitor* v, uint16_t * picture) {
 	v->file_set(picture);
 }
 
