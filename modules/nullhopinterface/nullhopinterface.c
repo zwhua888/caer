@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+
 struct nullhopwrapper_state {
 	uint32_t *integertest;
 	char * file_to_classify;
@@ -31,12 +32,12 @@ static struct caer_module_functions caerNullHopWrapperFunctions = {
 		NULL, .moduleExit = &caerNullHopWrapperExit };
 
 const char * caerNullHopWrapper(uint16_t moduleID,
-		caerFrameEventPacket imagestreamer) {
+		int * imagestreamer, bool * haveimg) {
 
 	caerModuleData moduleData = caerMainloopFindModule(moduleID,
 			"caerNullHopWrapper", PROCESSOR);
 	caerModuleSM(&caerNullHopWrapperFunctions, moduleData,
-			sizeof(struct nullhopwrapper_state), 1, imagestreamer);
+			sizeof(struct nullhopwrapper_state), 2, imagestreamer, haveimg);
 
 	return (NULL);
 }
@@ -49,11 +50,7 @@ static bool caerNullHopWrapperInit(caerModuleData moduleData) {
 			"detThreshold");
 
 	//Initializing nullhop network..
-	state->cpp_class = newzs_driverMonitor();
-
-	zs_driverMonitor_initNet(state->cpp_class);
-	zs_driverMonitor_launchThread(state->cpp_class);
-	//zs_driverMonitor_resetAxiBus(state->cpp_class);
+	state->cpp_class = newzs_driver("roshamboNet5l.nhp");
 
 	return (true);
 }
@@ -68,8 +65,8 @@ static void caerNullHopWrapperExit(caerModuleData moduleData) {
 static void caerNullHopWrapperRun(caerModuleData moduleData, size_t argsNumber,
 		va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
-	caerFrameEventPacket imagestreamer_hists = va_arg(args,
-			caerFrameEventPacket*);
+	int * imagestreamer_hists = va_arg(args, int*);
+	bool * haveimg = va_arg(args, bool*);
 
 	if (imagestreamer_hists == NULL) {
 		return;
@@ -81,16 +78,9 @@ static void caerNullHopWrapperRun(caerModuleData moduleData, size_t argsNumber,
 	state->detThreshold = sshsNodeGetDouble(moduleData->moduleNode,
 			"detThreshold");
 
-	//zs_driverMonitor_loadImage(state->cpp_class);
-	CAER_FRAME_ITERATOR_ALL_START(imagestreamer_hists)
+	if(haveimg[0] == true){
+		zs_driver_classify_image(state->cpp_class, imagestreamer_hists);
+	}
 
-
-		zs_driverMonitor_threadExists(state->cpp_class);
-
-		uint16_t *picture = (uint16_t *) caerFrameEventGetPixelArrayUnsafe(caerFrameIteratorElement);
-
-		zs_driverMonitor_file_set(state->cpp_class, picture);
-
-	CAER_FRAME_ITERATOR_ALL_END
 	return;
 }

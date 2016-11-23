@@ -3,6 +3,7 @@ IF (NOT ENABLE_NULLHOPINTERFACE)
 	IF (NOT FPGA_MODE)
 		SET(FPGA_MODE 1 CACHE BOOL "Set NullHop Interface to work only with the Zynq FPGA")
 	ENDIF()
+
 ENDIF()
 
 IF (ENABLE_NULLHOPINTERFACE)
@@ -31,7 +32,7 @@ IF (ENABLE_NULLHOPINTERFACE)
 	SET(NULLHOPIF_C_SRC_FILES ${NULLHOPIF_C_SRC_FILES} modules/nullhopinterface/nullhopinterface.c)
 
 	SET(NULLHOPIF_CXX_LIBS ${NULLHOPIF_CXX_LIBS} ${NULLHOPIF_C_LIBS})
-	SET(NULLHOPIF_CXX_SRC_FILES ${NULLHOPIF_CXX_SRC_FILES} modules/nullhopinterface/classify.cpp modules/nullhopinterface/wrapper.cpp)
+	SET(NULLHOPIF_CXX_SRC_FILES ${NULLHOPIF_CXX_SRC_FILES} modules/nullhopinterface/npp_log_utilities.cpp modules/nullhopinterface/npp_std_func_sw_pkg.cpp  modules/nullhopinterface/zs_top_level_sw_pkg.cpp modules/nullhopinterface/zs_axi_formatter.cpp modules/nullhopinterface/zs_backend_interface.cpp modules/nullhopinterface/zs_monitor_cnn_layer.cpp modules/nullhopinterface/zs_monitor.cpp modules/nullhopinterface/zs_cnn_layer.cpp modules/nullhopinterface/zs_fc_layer.cpp  modules/nullhopinterface/axigpio.cpp modules/nullhopinterface/axichanneltimeoutexcep.cpp modules/nullhopinterface/zsaxidmalib.cpp modules/nullhopinterface/axidmalib.cpp modules/nullhopinterface/classify.cpp modules/nullhopinterface/wrapper.cpp)
 
 	# Propagate to parent scope.
 	SET(CAER_INCDIRS ${CAER_INCDIRS} ${NULLHOPIF_CXX_INCDIRS} PARENT_SCOPE)

@@ -17,8 +17,7 @@
 //we cut out a quadratic part of the spike image from the rectangular input of the camera
 #define SIZE_QUADRATIC_MAP 180
 
-void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity,
-	int max_img_qty, int classify_img_size, caerFrameEventPacket *hist_packet);
+void caerImageGenerator(uint16_t moduleID, caerPolarityEventPacket polarity, int classify_img_size, int * hist_packet, bool *haveimg);
 
 
 #endif /* IMAGEGENERATOR_H_ */

@@ -1,4 +1,7 @@
+#ifndef __ZS_DRIVER_H__
+#define __ZS_DRIVER_H__
 /*
+
  * zs_driver.h
  *
  *  Created on: Oct 10, 2016
@@ -10,7 +13,6 @@
 #include "zs_top_level_sw_pkg.cpp"
 #include "zs_cnn_layer.h"
 #include "zs_fc_layer.h"
-#include "zs_monitor.h"
 #include "stdio.h"
 #include "iostream"
 #include "string.h"
@@ -44,14 +46,16 @@ private:
 	std::vector<zs_cnn_layer> cnn_network;
 	std::vector<zs_fc_layer> fc_network;
 
-	 void convert_input_image(int* l_image, int l_pixels_per_row,
+	inline void convert_input_image(int* l_image, int l_pixels_per_row,
 			int l_num_row, int l_total_num_pixel);
-	 std::vector<int64_t> compute_fc_layer(std::vector<int64_t> l_input,
+	inline std::vector<int64_t> compute_fc_layer(std::vector<int64_t> l_input,
 			int layer_idx);
-	 std::vector<uint64_t> compute_cnn_layer(
+	inline std::vector<uint64_t> compute_cnn_layer(
 			std::vector<uint64_t> l_input, int layer_idx, int pass_idx);
-	 void load_config_biases_kernels(int layer_idx, int pass_idx);
-	 void load_image(std::vector<uint64_t> l_input);
+	inline void load_config_biases_kernels(int layer_idx, int pass_idx);
+	inline void load_image(std::vector<uint64_t> l_input);
 	bool read_network_from_file(std::string network_file_name);
 
 };
+
+#endif

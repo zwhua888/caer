@@ -1,10 +1,8 @@
 #ifndef __ZS_DRIVER__
 #define __ZS_DRIVER__
-
-
-#include "classify.hpp"
-#include "npp_log_utilities.h"
-#include "npp_std_func_sw_pkg.cpp"
+#include "npp_log_utilities.cpp"
+#include "zs_monitor.h"
+#include "zs_driver.h"
 #include <functional>
 #include <numeric>
 #include <iterator>
@@ -15,6 +13,10 @@
 #include <ctime>
 #include <chrono>
 #include <string>
+
+
+
+
 
 unsigned int num_classified_0 = 0;
 unsigned int num_classified_1 = 0;
@@ -47,7 +49,7 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 
 }
 
- int zs_driver::classify_image(int* l_image) {
+inline int zs_driver::classify_image(int* l_image) {
 	log_utilities::medium("*************************************\n\n");
 	log_utilities::none("Starting classification of image %d",
 			total_num_processed_images);
@@ -56,7 +58,7 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 			std::chrono::high_resolution_clock::now();
 
 	int classification_result = -1;
-	std::vector<uint64_t> next_layer_input;
+	std::vector < uint64_t > next_layer_input;
 	total_num_processed_images++;
 
 	//Transform input image in ZS format and store it in class member first_layer_input
@@ -102,7 +104,7 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 			> (t2 - t1).count();
 	double duration_avg_ms = duration;
 
-	printf("Time CNN layers: %f ms \n", duration_avg_ms);
+	printf("\nTime CNN layers: %f ms \n", duration_avg_ms);
 
 	t1 = std::chrono::high_resolution_clock::now();
 
@@ -113,7 +115,7 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 
 		next_layer_input = remove_words_using_key(next_layer_input,
 				zs_axi_bits::IDLE_MASK); //remove the termination signal from the fifo
-		std::vector<int64_t> next_fc_input =
+		std::vector < int64_t > next_fc_input =
 				decompress_sm_image_as_linear_vector(next_layer_input,
 						zs_parameters::SPARSITY_MAP_WORD_NUM_BITS);
 
@@ -124,7 +126,7 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 				> (compr_end - compr_start).count();
 		duration_avg_ms = duration;
 
-		printf("Time decompression layers: %f ms \n", duration_avg_ms);
+		printf("\nTime decompression layers: %f ms \n", duration_avg_ms);
 
 		for (int fc_layer_idx = 0; fc_layer_idx < num_fc_layers;
 				fc_layer_idx++) {
@@ -141,10 +143,9 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 	duration = std::chrono::duration_cast < std::chrono::milliseconds
 			> (t2 - t1).count();
 	duration_avg_ms = duration;
-	printf("Time FC layers: %f ms \n", duration_avg_ms);
-	printf("Classification result: %d\n", classification_result);
-	log_utilities::none("Classification result: %d", classification_result);
+	printf("\nTime FC layers: %f ms \n", duration_avg_ms);
 
+	log_utilities::none("Classification result: %d", classification_result);
 #ifdef VERBOSITY_DEBUG // TODO: currently only for roshambo debug
 	if (classification_result == -1) {
 		log_utilities::debug("No FC layers are evaluated, classification result not available");
@@ -191,7 +192,7 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 //It assumes input is between 0 and 255 and needs to be normalized between 0 and 1
 //The conversion is done in place directly on the class array to minimize data movement
 //Code is optimized for computational speed rather than readability
- void zs_driver::convert_input_image(int* l_image, int l_pixels_per_row,
+inline void zs_driver::convert_input_image(int* l_image, int l_pixels_per_row,
 		int l_num_row, int l_total_num_pixel) {
 
 	int input_pixel_idx, input_pixel_idx_incr;
@@ -242,7 +243,7 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 	log_utilities::debug("Conversion done.");
 }
 
- std::vector<uint64_t> zs_driver::compute_cnn_layer(
+inline std::vector<uint64_t> zs_driver::compute_cnn_layer(
 		std::vector<uint64_t> l_input, int layer_idx, int pass_idx) {
 
 	if (layer_idx != 0 || pass_idx != 0) { //Data for first layer first pass are loaded at the end of previous pass
@@ -261,17 +262,19 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 //In order to speedup the computation biases are read and shifted left by MANTISSA_NUM_BITS (thus realigned with pixels/weight mult result)
 //and we just need to shift the result back after the computation
 //TODO: Pooling currently not supported
- std::vector<int64_t> zs_driver::compute_fc_layer(
+inline std::vector<int64_t> zs_driver::compute_fc_layer(
 		std::vector<int64_t> l_input, int layer_idx) {
 
-	std::vector<int64_t> fc_output;
+	std::vector < int64_t > fc_output;
 	int layer_num_output_channels = fc_network[layer_idx].num_output_channels;
 	fc_output.resize(layer_num_output_channels);
 
 	for (int kernel_idx = 0; kernel_idx < layer_num_output_channels;
 			kernel_idx++) {
 
-		fc_output[kernel_idx] = (inner_product(l_input.begin(), l_input.end(),
+
+		fc_output[kernel_idx] = (inner_product(l_input.begin(),
+				l_input.end(),
 				fc_network[layer_idx].weights[kernel_idx].begin(),
 				fc_network[layer_idx].biases[kernel_idx]))
 				/ zs_parameters::MANTISSA_RESCALE_FACTOR;
@@ -290,12 +293,12 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 	return (fc_output);
 }
 
- void zs_driver::load_config_biases_kernels(int layer_idx, int pass_idx) {
+inline void zs_driver::load_config_biases_kernels(int layer_idx, int pass_idx) {
 	log_utilities::high("Starting loading of config, biases and kernels...");
 	backend_if.write(cnn_network[layer_idx].get_load_array(pass_idx));
 }
 
- void zs_driver::load_image(std::vector<uint64_t> l_input) {
+inline void zs_driver::load_image(std::vector<uint64_t> l_input) {
 	//Appending image load done at the end of the image
 	/* l_input.push_back(
 	 pixel_formatter.format_word0((uint16_t) 1, (uint16_t) zs_parameters::REG_TYPE, (uint16_t) 1,
