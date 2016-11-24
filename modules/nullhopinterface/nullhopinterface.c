@@ -32,12 +32,12 @@ static struct caer_module_functions caerNullHopWrapperFunctions = {
 		NULL, .moduleExit = &caerNullHopWrapperExit };
 
 const char * caerNullHopWrapper(uint16_t moduleID,
-		int * imagestreamer, bool * haveimg) {
+		int * imagestreamer, bool * haveimg, int* result) {
 
 	caerModuleData moduleData = caerMainloopFindModule(moduleID,
 			"caerNullHopWrapper", PROCESSOR);
 	caerModuleSM(&caerNullHopWrapperFunctions, moduleData,
-			sizeof(struct nullhopwrapper_state), 2, imagestreamer, haveimg);
+			sizeof(struct nullhopwrapper_state), 3, imagestreamer, haveimg, result);
 
 	return (NULL);
 }
@@ -67,6 +67,7 @@ static void caerNullHopWrapperRun(caerModuleData moduleData, size_t argsNumber,
 	UNUSED_ARGUMENT(argsNumber);
 	int * imagestreamer_hists = va_arg(args, int*);
 	bool * haveimg = va_arg(args, bool*);
+	int * result = va_arg(args, int*);
 
 	if (imagestreamer_hists == NULL) {
 		return;
@@ -79,7 +80,7 @@ static void caerNullHopWrapperRun(caerModuleData moduleData, size_t argsNumber,
 			"detThreshold");
 
 	if(haveimg[0] == true){
-		zs_driver_classify_image(state->cpp_class, imagestreamer_hists);
+		result[0] = zs_driver_classify_image(state->cpp_class, imagestreamer_hists);
 	}
 
 	return;

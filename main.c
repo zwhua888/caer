@@ -224,10 +224,21 @@ static bool mainloop_1(void) {
 	// only run CNN if we have a file to classify
 
 	//printf("MAIN calling nullhop\n");
-	caerNullHopWrapper(22, classifyhist, haveimage);
+	int *results;
+	results  = (int*)calloc(2, sizeof(int));
+	results[0] = NULL;
+	caerNullHopWrapper(22, classifyhist, haveimage, results);
 
 #endif
 #endif
+
+#ifdef ENABLE_NULLHOPINTERFACE
+#ifdef ENABLE_ARDUINOCNT
+	caerArduinoCNT(24, results);
+	free(results);
+#endif
+#endif
+
 
 #ifdef ENABLE_IMAGEGENERATOR
 	free(classifyhist);
