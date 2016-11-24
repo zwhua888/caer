@@ -150,7 +150,7 @@ static bool caerArduinoCNTInit(caerModuleData moduleData) {
 	}
 	serialport_flush(state->fd);
 
-	state->dataTransfer = ringBufferInit(5);
+	state->dataTransfer = ringBufferInit(AVERAGEOVER);
 	if (state->dataTransfer == NULL) {
 		caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
 				"ringbuffer failed to initialize");

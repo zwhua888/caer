@@ -50,7 +50,7 @@ static bool caerNullHopWrapperInit(caerModuleData moduleData) {
 			"detThreshold");
 
 	//Initializing nullhop network..
-	state->cpp_class = newzs_driver("roshamboNet5l.nhp");
+	state->cpp_class = newzs_driver("roshamboNet.nhp");
 
 	return (true);
 }

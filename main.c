@@ -235,10 +235,15 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_NULLHOPINTERFACE
 #ifdef ENABLE_ARDUINOCNT
 	caerArduinoCNT(24, results);
-	free(results);
 #endif
 #endif
 
+#ifdef ENABLE_NULLHOPINTERFACE
+	// this also requires image generator
+#ifdef ENABLE_IMAGEGENERATOR
+	free(results);
+#endif
+#endif
 
 #ifdef ENABLE_IMAGEGENERATOR
 	free(classifyhist);
