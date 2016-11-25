@@ -141,9 +141,10 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 	duration = std::chrono::duration_cast < std::chrono::milliseconds
 			> (t2 - t1).count();
 	duration_avg_ms = duration;
+	int classification_result_arduino = classification_result+1;
 	printf("Time FC layers: %f ms \n", duration_avg_ms);
-	printf("Classification result: %d\n", classification_result);
-	log_utilities::none("Classification result: %d", classification_result);
+	printf("Classification result arduino: %d\n", classification_result_arduino);
+	log_utilities::none("Classification result arduino: %d", classification_result_arduino);
 
 #ifdef VERBOSITY_DEBUG // TODO: currently only for roshambo debug
 	if (classification_result == -1) {
@@ -185,7 +186,7 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 			"Classification completed, preloading first layer data for next image...");
 	load_config_biases_kernels(0, 0); // we start already to load config and weigths for the next first layer so ZS will be ready to process the new image immediately
 	log_utilities::high("Preload completed");
-	return (classification_result);
+	return (classification_result_arduino); // added one because ZERO is NULL in the arduino code
 }
 
 //It assumes input is between 0 and 255 and needs to be normalized between 0 and 1

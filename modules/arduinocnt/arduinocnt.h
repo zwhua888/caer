@@ -12,6 +12,6 @@
 
 #include <libcaer/events/polarity.h>
 
-void caerArduinoCNT(uint16_t moduleID, int results);
+void caerArduinoCNT(uint16_t moduleID, int results, bool *haveimage);
 
 #endif /* ARDUINOCNT_H*/

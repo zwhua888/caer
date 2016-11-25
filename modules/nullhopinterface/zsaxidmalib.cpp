@@ -67,13 +67,13 @@ unsigned int ZS_axidma::write_to_axidma(void) {
 	//running_thread = true;
 	pthread_mutex_lock(&write_mxt);
 	bool write_data_list_empty = write_data.empty();
-	pthread_mutex_unlock(&write_mxt);
+	//pthread_mutex_unlock(&write_mxt);
 
 	int write_return = 0;
 
 	//while(!write_data_list_empty)
 	if (!write_data_list_empty) {
-		pthread_mutex_lock(&write_mxt);
+		//pthread_mutex_lock(&write_mxt);
 		try {
 			write_return = axidma.write(write_data.front());
 			write_data.pop_front();
@@ -87,9 +87,10 @@ unsigned int ZS_axidma::write_to_axidma(void) {
 					write_data.size());
 		}
 		write_data_list_empty = write_data.empty();
-		pthread_mutex_unlock(&write_mxt);
+
 	}
 	//running_thread = false;
+	pthread_mutex_unlock(&write_mxt);
 	return write_return;
 }
 

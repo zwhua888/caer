@@ -225,7 +225,7 @@ static bool mainloop_1(void) {
 
 	//printf("MAIN calling nullhop\n");
 	int *results;
-	results  = (int*)calloc(2, sizeof(int));
+	results  = (int*)calloc(1, sizeof(int));
 	results[0] = NULL;
 	caerNullHopWrapper(22, classifyhist, haveimage, results);
 
@@ -234,7 +234,7 @@ static bool mainloop_1(void) {
 
 #ifdef ENABLE_NULLHOPINTERFACE
 #ifdef ENABLE_ARDUINOCNT
-	caerArduinoCNT(24, results);
+	caerArduinoCNT(24, results, haveimage);
 #endif
 #endif
 
