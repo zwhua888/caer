@@ -1,8 +1,8 @@
 /*
- * backgroundactivityfilter.c
+ * arduino control via serial port
  *
- *  Created on: Jan 20, 2014
- *      Author: chtekk
+ *  Created on: Nov 2016
+ *      Author: federico.corradi@inilabs.com
  */
 
 #include "arduinocnt.h"

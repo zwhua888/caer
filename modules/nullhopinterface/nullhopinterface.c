@@ -11,7 +11,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-
 struct nullhopwrapper_state {
 	uint32_t *integertest;
 	char * file_to_classify;
@@ -50,7 +49,7 @@ static bool caerNullHopWrapperInit(caerModuleData moduleData) {
 			"detThreshold");
 
 	//Initializing nullhop network..
-	state->cpp_class = newzs_driver("roshamboNet.nhp");
+	state->cpp_class = newzs_driver("/bin/roshamboNet_v3.nhp");
 
 	return (true);
 }

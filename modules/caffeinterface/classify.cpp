@@ -8,37 +8,32 @@ using namespace caffe;
 // NOLINT(build/namespaces)
 using std::string;
 
-void MyClass::file_set(char * i, double *b, double thr, bool printoutputs,
-		caerFrameEvent single_frame, bool showactivations) {
-	MyClass::file_i = i;
+void MyClass::file_set(int* l_image, int size) {
 
-	if (file_i != NULL) {
 
-		//std::cout << "\n---------- Prediction for " << file_i << " started ----------\n" << std::endl;
-		cv::Mat img = cv::imread(file_i, 0);
-		cv::Mat img2;
-		img.convertTo(img2, CV_32FC1);
-		img2 = img2 * 0.00390625;
-		//std::cout << "\n" << img2 << std::endl;
+	//cv::Mat img = cv::imread(file_i, 0);
 
-		CHECK(!img.empty()) << "Unable to decode image " << file_i;
-		std::vector<Prediction> predictions = MyClass::Classify(img2, 5,
-				single_frame, showactivations);
+	cv::Mat img = Mat(size,size,CV_8UC1, l_image);	
+	cv::Mat img2;
+	img.convertTo(img2, CV_32FC1);
+	img2 = img2 * 0.00390625;	//between zero and one
+	std::cout << "\n" << img2 << std::endl;
 
-		/* Print the top N predictions. */
-		for (size_t i = 0; i < predictions.size(); ++i) {
-			Prediction p = predictions[i];
-			if (printoutputs) {
-				std::cout << "\n" << std::fixed << std::setprecision(4)
-						<< p.second << " - \"" << p.first << "\"" << std::endl;
-			}
-			// for face detection net
-			if (p.first.compare("FACE") == 0 && p.second > thr) {
-				*b = p.second;
-				std::cout << "\n" << p.second << " DETECTION " << std::endl;
-			}
+	CHECK(!img.empty()) << "Unable to decode image " << file_i;
+	std::vector<Prediction> predictions = MyClass::Classify(img2, 5,
+			single_frame, showactivations);
+
+	/* Print the top N predictions. */
+	int res = 0 ;
+	for (size_t i = 0; i < predictions.size(); ++i) {
+		Prediction p = predictions[i];
+		if (printoutputs) {
+			std::cout << "\n" << std::fixed << std::setprecision(4)
+					<< p.second << " - \"" << p.first << "\"" << std::endl;
 		}
 	}
+	
+	return (res);
 }
 
 char * MyClass::file_get() {
