@@ -8,17 +8,20 @@ using namespace caffe;
 // NOLINT(build/namespaces)
 using std::string;
 
-void MyClass::file_set(int* l_image, int size) {
+int MyClass::file_set(int* l_image, int size) {
 
 
 	//cv::Mat img = cv::imread(file_i, 0);
 
-	cv::Mat img = Mat(size,size,CV_8UC1, l_image);	
+	cv::Mat img = cv::Mat(size,size,CV_8UC1, l_image);	
 	cv::Mat img2;
 	img.convertTo(img2, CV_32FC1);
 	img2 = img2 * 0.00390625;	//between zero and one
 	std::cout << "\n" << img2 << std::endl;
 
+	caerFrameEvent single_frame; //!! empty
+	bool showactivations = false;
+	bool printoutputs = true;
 	CHECK(!img.empty()) << "Unable to decode image " << file_i;
 	std::vector<Prediction> predictions = MyClass::Classify(img2, 5,
 			single_frame, showactivations);

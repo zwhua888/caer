@@ -79,7 +79,7 @@ static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber, va
 		}
 	}*/
 	if(haveimg[0] == true){
-		result[0] = MyClass_file_set(state->cpp_class, imagestreamer_hists, size);
+		result[0] = MyClass_file_set(state->cpp_class, imagestreamer_hists, 64);
 	}
 
 	//update module state
