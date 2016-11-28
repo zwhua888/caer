@@ -25,7 +25,7 @@ Axidma::Axidma(unsigned int axidma_addr_offset, unsigned int source_addr_offset,
 	destination_addr = (uint64_t*) mmap(NULL,
 			AXIDMA_MEMORY_MAPPING_READ_SIZE_DEFINE, PROT_READ | PROT_WRITE,
 			MAP_SHARED, whole_memory_pointer, DESTINATION_ADDR_OFFSET); // Memory map destination address
-	axidma_channel_timeout_us = 1000000;
+	axidma_channel_timeout_us = 10000000;
 	read_transfer_length_bytes = 0x100;
 }
 
@@ -191,9 +191,9 @@ void Axidma::stop(void) {
 unsigned int Axidma::write(std::vector<uint64_t> data) {
 	//   printf("inside axidma write called\n");
 	unsigned int numBytes = data.size() * sizeof(uint64_t);
-	//  printf("got numBytes: %d\n", numBytes);
+	 // printf("got numBytes: %d\n", numBytes);
 	std::copy(data.begin(), data.end(), source_addr);
-	//  printf("std:copy done\n");
+	 // printf("std:copy done\n");
 	if ((numBytes > 0) && (numBytes <= (unsigned int) pow(2, 23))) {
 		//  printf("inside IF\n");
 		source_addr[0] |= ((uint64_t) 1 & 0xFF) << 50;
@@ -201,11 +201,11 @@ unsigned int Axidma::write(std::vector<uint64_t> data) {
 				/ sizeof(uint64_t)) & 0xFFF) << 51; //We use 8Bytes words in the S2MM bus
 		//      printf("Source assigned\n");
 		set_dma_register_value(MM2S_LENGTH, numBytes);
-		//    printf("DMA register assigned\n");
+		 //   printf("DMA register assigned\n");
 		mm2s_pooling_sync();
-		//   printf("pooling sync done\n");
+		 //  printf("pooling sync done\n");
 		clear_mm2s_flags();
-		//   printf("pooling sync done\n");
+		 //  printf("clearflag done\n");
 		return numBytes;
 	}
 

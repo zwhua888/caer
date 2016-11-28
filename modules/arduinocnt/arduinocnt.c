@@ -21,8 +21,8 @@
 #define ROCK 3
 #define PAPER 1
 #define SCISSORS 2
-#define BACKGROUND 4
-#define AVERAGEOVER 5
+#define BACKGROUND 4	//network output unit number one based (starting from one)
+#define AVERAGEOVER 3
 
 struct ASFilter_state {
 	int fd;
@@ -200,16 +200,14 @@ static void caerArduinoCNTRun(caerModuleData moduleData, size_t argsNumber,
 	ASFilterState state = moduleData->moduleState;
 
 	if (haveimage[0]) {
-		/*if (!ringBufferPut(state->dataTransfer, result[0])) {
-		 caerLog(CAER_LOG_INFO, moduleData->moduleSubSystemString,
-		 "Dropped decision because ringbuffer full");
-		 }*/
+
 		atomic_store(&state->decision[state->pos], result[0]);
 		if (state->pos == AVERAGEOVER) {
 			state->pos = 0;
 		} else {
 			state->pos = state->pos + 1;
 		}
+
 	}
 
 }

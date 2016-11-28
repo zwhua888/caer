@@ -75,9 +75,10 @@ unsigned int ZS_axidma::write_to_axidma(void) {
 	if (!write_data_list_empty) {
 		//pthread_mutex_lock(&write_mxt);
 		try {
+			//printf("(Write thread) pre write_data list num elements --> %d\n", write_data.size());
 			write_return = axidma.write(write_data.front());
 			write_data.pop_front();
-			//printf("(Write thread) write_data list num elements --> %d\n", write_data.size());
+			//printf("(Write thread) post write_data list num elements --> %d\n", write_data.size());
 		} catch (AXIDMA_timeout_exception& ex) {
 			printf(ex.what());
 			stop();
@@ -91,6 +92,7 @@ unsigned int ZS_axidma::write_to_axidma(void) {
 	}
 	//running_thread = false;
 	pthread_mutex_unlock(&write_mxt);
+	//printf("(Write thread)  ZS_axidma::write_to_axidma\n");
 	return write_return;
 }
 

@@ -50,7 +50,7 @@ static bool caerNullHopWrapperInit(caerModuleData moduleData) {
 			"detThreshold");
 
 	//Initializing nullhop network..
-	state->cpp_class = newzs_driver("roshamboNet.nhp");
+	state->cpp_class = newzs_driver("roshamboNet_v3.nhp");
 
 	return (true);
 }
@@ -80,7 +80,14 @@ static void caerNullHopWrapperRun(caerModuleData moduleData, size_t argsNumber,
 			"detThreshold");
 
 	if(haveimg[0] == true){
-		result[0] = zs_driver_classify_image(state->cpp_class, imagestreamer_hists);
+
+		FILE* fp = fopen("image_dump.txt","w");
+
+		for (int idx = 0; idx < 64*64; idx++){
+			fprintf(fp, "%d\n",  imagestreamer_hists[idx]);
+		}
+		fclose(fp);
+		result[0] = zs_driver_classify_image(state->cpp_class, imagestreamer_hists) + 1;
 	}
 
 	return;

@@ -18,6 +18,7 @@ class zs_monitor {
       zs_monitor();
       void classify_image(std::vector<uint64_t> image);
       void check_layer_activations(std::vector<uint64_t> activations, int layer_idx);
+      int get_monitor_classification();
 
    private:
       int cnn_num_layers;

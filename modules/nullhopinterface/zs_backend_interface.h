@@ -1,7 +1,7 @@
 #ifndef __ZS_BACKEND_INTERFACE_H__
 #define __ZS_BACKEND_INTERFACE_H__
 
-#define FPGA_MODE
+#define FPGA_MODE //TODO REPLACE
 
 #include "stdio.h"
 #include "iostream"
