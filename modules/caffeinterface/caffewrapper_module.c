@@ -25,15 +25,14 @@ static struct caer_module_functions caerCaffeWrapperFunctions = { .moduleInit = 
 	&caerCaffeWrapperRun, .moduleConfig =
 NULL, .moduleExit = &caerCaffeWrapperExit };
 
-const char * caerCaffeWrapper(uint16_t moduleID, char ** file_string, double *classificationResults, int max_img_qty,
-	caerFrameEventPacket *networkActivity) {
+const char * caerCaffeWrapper(uint16_t moduleID,
+		int * imagestreamer, bool * haveimg, int* result, int size) {
 	caerModuleData moduleData = caerMainloopFindModule(moduleID, "caerCaffeWrapper", PROCESSOR);
 	if (moduleData == NULL) {
 		return (NULL);
 	}
 
-	caerModuleSM(&caerCaffeWrapperFunctions, moduleData, sizeof(struct caffewrapper_state), 4, file_string,
-		classificationResults, max_img_qty, networkActivity);
+	caerModuleSM(&caerCaffeWrapperFunctions, moduleData, sizeof(struct caffewrapper_state), 4, imagestreamer, haveimg, result, size);
 
 	return (NULL);
 }
@@ -62,39 +61,32 @@ static void caerCaffeWrapperExit(caerModuleData moduleData) {
 
 static void caerCaffeWrapperRun(caerModuleData moduleData, size_t argsNumber, va_list args) {
 	UNUSED_ARGUMENT(argsNumber);
+
+	int * imagestreamer_hists = va_arg(args, int*);
+	bool * haveimg = va_arg(args, bool*);
+	int * result = va_arg(args, int*);
+
+	if (imagestreamer_hists == NULL) {
+		return;
+	}
+
 	caffewrapperState state = moduleData->moduleState;
-	char ** file_string = va_arg(args, char **);
-	double *classificationResults = va_arg(args, double*);
-	int max_img_qty = va_arg(args, int);
-	caerFrameEventPacket *networkActivity = va_arg(args, caerFrameEventPacket*);
+
+	/*for (int i = 0; i < max_img_qty; ++i) {
+		if (file_string[i] != NULL) {
+			MyClass_file_set(state->cpp_class, file_string[i], &classificationResults[i], state->detThreshold,
+				state->doPrintOutputs, single_frame, state->doShowActivations);
+		}
+	}*/
+	if(haveimg[0] == true){
+		result[0] = MyClass_file_set(state->cpp_class, imagestreamer_hists, 64);
+	}
 
 	//update module state
 	state->detThreshold = sshsNodeGetDouble(moduleData->moduleNode, "detThreshold");
 	state->doPrintOutputs = sshsNodeGetBool(moduleData->moduleNode, "doPrintOutputs");
 	state->doShowActivations = sshsNodeGetBool(moduleData->moduleNode, "doShowActivations");
 
-	//allocate single frame
-	int frame_x = 480;
-	int frame_y = 480;
-	*networkActivity = caerFrameEventPacketAllocate(1, I16T(moduleData->moduleID), 0, frame_x, frame_y, 3);
-	caerFrameEvent single_frame = caerFrameEventPacketGetEvent(*networkActivity, 0);
-	//add info to the frame
-	caerFrameEventSetLengthXLengthYChannelNumber(single_frame, frame_x, frame_y, 3, *networkActivity); // to do remove hard coded size
-	//single_frame->pixels[0] = (uint16_t) (20);
-
-	for (int i = 0; i < max_img_qty; ++i) {
-		if (file_string[i] != NULL) {
-			MyClass_file_set(state->cpp_class, file_string[i], &classificationResults[i], state->detThreshold,
-				state->doPrintOutputs, single_frame, state->doShowActivations);
-		}
-	}
-	// validate frame
-	if (single_frame != NULL) {
-		caerFrameEventValidate(single_frame, *networkActivity);
-	}
-	else {
-		*networkActivity = NULL;
-	}
 
 	return;
 }

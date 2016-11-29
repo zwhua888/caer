@@ -10,9 +10,8 @@ MyClass* newMyClass() {
 	return new MyClass();
 }
 
-void MyClass_file_set(MyClass* v, char * i, double *b, double thr, bool printoutputs, caerFrameEvent single_frame,
-	bool showactivations) {
-	v->file_set(i, b, thr, printoutputs, single_frame, showactivations);
+int MyClass_file_set(MyClass* v, int * picture, int size){
+	v->file_set(picture, size);
 }
 
 char * MyClass_file_get(MyClass* v) {

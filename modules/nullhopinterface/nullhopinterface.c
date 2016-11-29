@@ -11,7 +11,6 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-
 struct nullhopwrapper_state {
 	uint32_t *integertest;
 	char * file_to_classify;
@@ -50,7 +49,7 @@ static bool caerNullHopWrapperInit(caerModuleData moduleData) {
 			"detThreshold");
 
 	//Initializing nullhop network..
-	state->cpp_class = newzs_driver("roshamboNet_v3.nhp");
+	state->cpp_class = newzs_driver("/bin/roshamboNet_v3.nhp");
 
 	return (true);
 }
@@ -81,12 +80,6 @@ static void caerNullHopWrapperRun(caerModuleData moduleData, size_t argsNumber,
 
 	if(haveimg[0] == true){
 
-		FILE* fp = fopen("image_dump.txt","w");
-
-		for (int idx = 0; idx < 64*64; idx++){
-			fprintf(fp, "%d\n",  imagestreamer_hists[idx]);
-		}
-		fclose(fp);
 		result[0] = zs_driver_classify_image(state->cpp_class, imagestreamer_hists) + 1;
 	}
 

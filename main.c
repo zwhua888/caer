@@ -75,9 +75,6 @@
 #ifdef ENABLE_CAFFEINTERFACE
 #include "modules/caffeinterface/wrapper.h"
 #endif
-#ifdef ENABLE_IMAGESTREAMERBEEPER
-#include "modules/imagestreamerbeeper/imagestreamerbeeper.h"
-#endif
 
 static bool mainloop_1(void);
 
@@ -177,13 +174,7 @@ static bool mainloop_1(void) {
 	caerVisualizer(60, "Polarity", &caerVisualizerRendererPolarityEvents, visualizerEventHandler, (caerEventPacketHeader) polarity);
 	caerVisualizer(61, "Frame", &caerVisualizerRendererFrameEvents, visualizerEventHandler, (caerEventPacketHeader) frame);
 	caerVisualizer(62, "IMU6", &caerVisualizerRendererIMU6Events, visualizerEventHandler, (caerEventPacketHeader) imu);
-
 	//caerVisualizerMulti(68, "PolarityAndFrame", &caerVisualizerMultiRendererPolarityAndFrameEvents, visualizerEventHandler, container);
-#endif
-
-#ifdef ENABLE_FILE_OUTPUT
-	// Enable output to file (AEDAT 3.X format).
-	caerOutputFile(7, 4, polarity, frame, imu, special);
 #endif
 
 #ifdef ENABLE_IMAGEGENERATOR
@@ -205,6 +196,39 @@ static bool mainloop_1(void) {
 #endif
 #endif
 
+#ifdef ENABLE_NULLHOPINTERFACE || ENABLE_CAFFEINTERFACE
+	// this also requires image generator
+#ifdef ENABLE_IMAGEGENERATOR
+	// this wrapper let you interact with NullHop
+	// for example, we now classify the latest image
+	// only run CNN if we have a file to classify
+
+	int *results;
+	results  = (int*)calloc(1, sizeof(int));
+	results[0] = NULL;
+#endif
+#endif
+
+#ifdef ENABLE_CAFFEINTERFACE
+	// this also requires image generator
+#ifdef ENABLE_IMAGEGENERATOR
+	caerCaffeWrapper(23, classifyhist, haveimage, results, CLASSIFYSIZE);
+#endif
+#endif
+
+#ifdef ENABLE_NULLHOPINTERFACE
+	// this also requires image generator
+#ifdef ENABLE_IMAGEGENERATOR
+	caerNullHopWrapper(22, classifyhist, haveimage, results);
+#endif
+#endif
+
+#ifdef ENABLE_NULLHOPINTERFACE
+#ifdef ENABLE_ARDUINOCNT
+	caerArduinoCNT(24, results, haveimage);
+#endif
+#endif
+
 #ifdef ENABLE_NETWORK_OUTPUT
 	// Send polarity packets out via TCP. This is the server mode!
 	// External clients connect to cAER, and we send them the data.
@@ -215,27 +239,9 @@ static bool mainloop_1(void) {
 	// And also send them via UDP. This is fast, as it doesn't care what is on the other side.
 	//caerOutputNetUDP(9, 1, polarity); //, frame, imu, special);
 #endif
-
-#ifdef ENABLE_NULLHOPINTERFACE
-	// this also requires image generator
-#ifdef ENABLE_IMAGEGENERATOR
-	// this wrapper let you interact with NullHop
-	// for example, we now classify the latest image
-	// only run CNN if we have a file to classify
-
-	//printf("MAIN calling nullhop\n");
-	int *results;
-	results  = (int*)calloc(1, sizeof(int));
-	results[0] = NULL;
-	caerNullHopWrapper(22, classifyhist, haveimage, results);
-
-#endif
-#endif
-
-#ifdef ENABLE_NULLHOPINTERFACE
-#ifdef ENABLE_ARDUINOCNT
-	caerArduinoCNT(24, results, haveimage);
-#endif
+#ifdef ENABLE_FILE_OUTPUT
+	// Enable output to file (AEDAT 3.X format).
+	caerOutputFile(7, 4, polarity, frame, imu, special);
 #endif
 
 #ifdef ENABLE_NULLHOPINTERFACE
@@ -248,14 +254,6 @@ static bool mainloop_1(void) {
 #ifdef ENABLE_IMAGEGENERATOR
 	free(classifyhist);
 	free(haveimage);
-#endif
-#ifdef ENABLE_IMAGESTREAMERBEEPER
-	// add allegro sound on detection
-#ifdef ENABLE_CAFFEINTERFACE
-	if(classification_results != NULL) {
-		caerImagestreamerBeeper(23, classification_results, (int) MAX_IMG_QTY);
-	}
-#endif
 #endif
 
 	return (true); // If false is returned, processing of this loop stops.

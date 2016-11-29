@@ -42,8 +42,7 @@ public:
 		const string& label_file);
 	std::vector<Prediction> Classify(const cv::Mat& img, int N, caerFrameEvent single_frame, bool showactivations);
 	void caller();
-	void file_set(char * i, double *b, double thr, bool printoutputs, caerFrameEvent single_frame,
-		bool showactivations);
+	int file_set(int* l_image, int size);
 	int hello_caffe();
 	char * file_get();
 	void init_network();
