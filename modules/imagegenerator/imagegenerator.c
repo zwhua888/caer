@@ -243,10 +243,50 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
             exit(1);
         }
 
-        // Iterate over events and accumulate them
-        CAER_POLARITY_ITERATOR_VALID_START(polarity)
+        caerEventPacketHeader *onlyvalid =  caerCopyEventPacketOnlyValidEvents(polarity);
+        if(onlyvalid == NULL){
+            return;
+        }
+        int32_t numtotevs =   caerEventPacketHeaderGetEventValid(onlyvalid);
 
-        // Get coordinates and polarity (0 or 1) of latest spike.
+        caerPolarityEventPacket currPolarityPacket = (caerPolarityEventPacket) onlyvalid;
+
+        //default is all events
+        int numevs_start = 0;
+        int numevs_end = numtotevs;
+
+        if( numtotevs >= state->numSpikes ){
+            //get rid of accumulated spikes
+            for (int col_idx = 0; col_idx < state->sizeX; col_idx++) {
+                for (int row_idx = 0; row_idx < state->sizeY; row_idx++) {
+                    state->ImageMap[col_idx][row_idx] = 0;
+                }
+            }
+            state->spikeCounter = 0;
+            //takes only the last 2000
+            numevs_start = numtotevs - state->numSpikes;
+            numevs_end = numtotevs;
+
+        }else if( (numtotevs+state->spikeCounter) >= state->numSpikes ){
+            //takes only the last 2000
+            numevs_start = numtotevs - (state->numSpikes-state->spikeCounter);
+            numevs_end = numtotevs;
+        }
+
+
+        for (int32_t caerPolarityIteratorCounter = numevs_start;
+                caerPolarityIteratorCounter
+                        <  numevs_end;
+                caerPolarityIteratorCounter++) {
+
+            caerPolarityEvent caerPolarityIteratorElement = caerPolarityEventPacketGetEvent(
+                    currPolarityPacket, caerPolarityIteratorCounter);
+
+            if (!caerPolarityEventIsValid(caerPolarityIteratorElement)) {
+                continue;
+            } // Skip invalid polarity events.
+
+            // Get coordinates and polarity (0 or 1) of latest spike.
             uint16_t x = caerPolarityEventGetX(caerPolarityIteratorElement);
             uint16_t y = caerPolarityEventGetY(caerPolarityIteratorElement);
             int pol = caerPolarityEventGetPolarity(caerPolarityIteratorElement);
@@ -276,46 +316,47 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
             //If we saw enough spikes, generate Image from ImageMap.
             if (state->spikeCounter >= state->numSpikes) {
 
+                printf("generating image with numspikes %d\n", state->numSpikes);
                 haveimg[0] = true; // we got an image to classify
 
                 //Code snippet to test normalization with fixed input
                 /*for (int col_idx = 0; col_idx < state->sizeX; col_idx++) {
-                    for (int row_idx = 0; row_idx < state->sizeY; row_idx++) {
-                        state->ImageMap[col_idx][row_idx] = 256;
-                    }
-                }*/
-/*
-                FILE*fp = fopen("test.txt","r");
+                 for (int row_idx = 0; row_idx < state->sizeY; row_idx++) {
+                 state->ImageMap[col_idx][row_idx] = 256;
+                 }
+                 }*/
+                /*
+                 FILE*fp = fopen("test.txt","r");
 
-                if (fp == NULL) {
+                 if (fp == NULL) {
 
-                    printf("Cant open the file\n");
-                    exit(-1);
+                 printf("Cant open the file\n");
+                 exit(-1);
 
-                }
-                int col_idx, row_idx;
-                col_idx = 0;
-                row_idx = 0;
-                for (int read_idx = 0; read_idx < 64*64; read_idx++){
-                  //  printf("Reading pixel %d\n", read_idx);
-                    float pixel;
-                    uint64_t scaled_pixel;
+                 }
+                 int col_idx, row_idx;
+                 col_idx = 0;
+                 row_idx = 0;
+                 for (int read_idx = 0; read_idx < 64*64; read_idx++){
+                 //  printf("Reading pixel %d\n", read_idx);
+                 float pixel;
+                 uint64_t scaled_pixel;
                  //   printf("1\n");
-                    fscanf(fp, "%f\n", &pixel);
-                //    printf("2\n");
-                    scaled_pixel = floor(pixel*256);
-                //    printf("3\n");
-                    state->ImageMap[col_idx][row_idx] = scaled_pixel;
-                //    printf("4\n");
-                    col_idx++;
-                    if (col_idx == 64){
-                        col_idx = 0;
-                        row_idx++;
-                    }
+                 fscanf(fp, "%f\n", &pixel);
+                 //    printf("2\n");
+                 scaled_pixel = floor(pixel*256);
+                 //    printf("3\n");
+                 state->ImageMap[col_idx][row_idx] = scaled_pixel;
+                 //    printf("4\n");
+                 col_idx++;
+                 if (col_idx == 64){
+                 col_idx = 0;
+                 row_idx++;
+                 }
 
-                }
-                printf("File read done\n");
-*/
+                 }
+                 printf("File read done\n");
+                 */
                 if (!normalize_image_map_sigma(state, hist, CLASSIFY_IMG_SIZE)) {
                     caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
                             "Failed to normalize image map with 3 sigma range.");
@@ -333,7 +374,9 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
                 // free chunks of memory
                 state->frameRenderer = NULL;
 
-            }CAER_POLARITY_ITERATOR_VALID_END
+            }
+        } //CAER_POLARITY_ITERATOR_VALID_END
+        free(onlyvalid);
     }/* **** SPIKE SECTION END *** */
 
 }

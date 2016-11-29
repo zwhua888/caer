@@ -22,7 +22,7 @@
 #define PAPER 1
 #define SCISSORS 2
 #define BACKGROUND 4	//network output unit number one based (starting from one)
-#define AVERAGEOVER 3
+#define AVERAGEOVER 1
 
 struct ASFilter_state {
 	int fd;

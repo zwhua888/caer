@@ -191,7 +191,7 @@ static bool mainloop_1(void) {
 	char mainString[16] = "_main.c_";
 
 
-	int * classifyhist = calloc((size_t)CLASSIFYSIZE * CLASSIFYSIZE * 1, sizeof(int));
+	int * classifyhist = calloc((int)CLASSIFYSIZE * CLASSIFYSIZE, sizeof(int));
 	if (classifyhist == NULL) {
 			return (false); // Failure.
 	}
