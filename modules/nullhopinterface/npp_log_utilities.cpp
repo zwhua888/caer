@@ -1,8 +1,8 @@
 #ifndef __NPP_LOG_UTILITIES_CPP__
 #define __NPP_LOG_UTILITIES_CPP__
 
-#define ENABLE_LOG
-#define VERBOSITY_NONE
+//#define ENABLE_LOG
+#define VERBOSITY_DEBUG
 
 #include "npp_log_utilities.h"
 #include "string.h"

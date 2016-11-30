@@ -18,17 +18,13 @@
 #include <string>
 #include <exception>
 #include <stdexcept>
-unsigned int num_classified_0 = 0;
-unsigned int num_classified_1 = 0;
-unsigned int num_classified_2 = 0;
-unsigned int num_classified_3 = 0;
 
 zs_driver::zs_driver(std::string network_file_name = "") {
     num_fc_layers = 0;
     num_cnn_layers = 0;
     total_num_layers = 0;
     total_num_processed_images = 0;
-
+    time_accumulator = 0;
     log_utilities::none("Proceeding with network loading, network is: %s",
             network_file_name.c_str());
 
@@ -49,7 +45,11 @@ zs_driver::zs_driver(std::string network_file_name = "") {
 int zs_driver::classify_image(int* l_image) {
     log_utilities::medium("*************************************\n\n");
     log_utilities::none("Starting classification of image %d", total_num_processed_images);
-    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+    double duration;
+    std::chrono::high_resolution_clock::time_point t_compression_end, t_fc_end, t_conv_end;
+
+    std::chrono::high_resolution_clock::time_point t_computation_start =
+            std::chrono::high_resolution_clock::now();
 
     int classification_result = -1;
     std::vector<uint64_t> next_layer_input;
@@ -57,8 +57,7 @@ int zs_driver::classify_image(int* l_image) {
 
     //Transform input image in ZS format and store it in class member first_layer_input
     //There is no return to avoid useless data movment and array initializations
-    convert_input_image(l_image, first_layer_pixels_per_row, first_layer_num_rows,
-            first_layer_num_pixels);
+    convert_input_image(l_image, first_layer_num_rows, first_layer_num_pixels);
 
     monitor.classify_image(first_layer_input);
 #ifndef SOFTWARE_ONLY_MODE
@@ -85,39 +84,27 @@ int zs_driver::classify_image(int* l_image) {
             monitor.check_layer_activations(next_layer_input, layer_idx);
         }
     } catch (std::exception& e) {
-        log_utilities::error("**ERROR - Error in CNN computation, aborting image classification...");
-        return(0);
+        log_utilities::error(
+                "**ERROR - Error in CNN computation, aborting image classification...");
+        return (0);
     }
     log_utilities::medium("Convolutional layers completed, processing FC layers...");
+
+    load_config_biases_kernels(0, 0); // we start already to load config and weigths for the next first layer so ZS will be ready to process the new image immediately
+
     //FC layers
     //TODO In next future CNN and FC layers will derive from same base class, so we can alternate FC and CNN layers
     //TODO In current release FC layers can be only at network's end
 
-    std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
-    double duration = std::chrono::duration_cast < std::chrono::milliseconds > (t2 - t1).count();
-    double duration_avg_ms = duration;
-
-    //printf("Time CNN layers: %f ms \n", duration_avg_ms);
-
-    t1 = std::chrono::high_resolution_clock::now();
+    //t_conv_end = std::chrono::high_resolution_clock::now();
 
     if (num_fc_layers > 0) {
-
-        std::chrono::high_resolution_clock::time_point compr_start =
-        std::chrono::high_resolution_clock::now();
 
         next_layer_input = remove_words_using_key(next_layer_input, zs_axi_bits::IDLE_MASK); //remove the termination signal from the fifo
         std::vector<int64_t> next_fc_input = decompress_sm_image_as_linear_vector(next_layer_input,
                 zs_parameters::SPARSITY_MAP_WORD_NUM_BITS);
 
-        std::chrono::high_resolution_clock::time_point compr_end =
-        std::chrono::high_resolution_clock::now();
-
-        duration = std::chrono::duration_cast < std::chrono::milliseconds
-        > (compr_end - compr_start).count();
-        duration_avg_ms = duration;
-
-        //	printf("Time decompression layers: %f ms \n", duration_avg_ms);
+        //    t_compression_end = std::chrono::high_resolution_clock::now();
 
         for (int fc_layer_idx = 0; fc_layer_idx < num_fc_layers; fc_layer_idx++) {
             log_utilities::medium("Starting FC layer %d...", fc_layer_idx);
@@ -131,9 +118,34 @@ int zs_driver::classify_image(int* l_image) {
                 next_fc_input[1], next_fc_input[2], next_fc_input[3]);
     }
 
-    t2 = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast < std::chrono::milliseconds > (t2 - t1).count();
-    duration_avg_ms = duration;
+    t_fc_end = std::chrono::high_resolution_clock::now();
+
+    //  duration = std::chrono::duration_cast < std::chrono::milliseconds
+    //     > (t_conv_end - t_computation_start).count();
+//
+    // printf("Time CNN layers: %lf ms \n", duration);
+
+    //  duration = std::chrono::duration_cast < std::chrono::milliseconds
+//            > (t_compression_end - t_conv_end).count();
+
+    //  printf("Time decompression layers: %lf ms \n", duration);
+    // duration = std::chrono::duration_cast < std::chrono::milliseconds
+    //     > (t_fc_end - t_compression_end).count();
+
+    //  printf("Time FC layers: %lf ms \n", duration);
+
+    duration = std::chrono::duration_cast < std::chrono::milliseconds
+            > (t_fc_end - t_computation_start).count();
+    //  printf("Total processing time: %lf ms \n", duration);
+
+    time_accumulator = time_accumulator + duration;
+    double average_duration = time_accumulator / (total_num_processed_images + 1);
+    printf("Average processing time: %lf ms \n", average_duration);
+    if (total_num_processed_images % 200 == 0) {
+        printf("\n\n****Checkpoint %d\n\n", total_num_processed_images);
+
+    }
+
 #endif
 
 #ifdef ENABLE_RESULT_MONITOR
@@ -170,10 +182,6 @@ int zs_driver::classify_image(int* l_image) {
             result_string.c_str());
     log_utilities::high("Classification completed, preloading first layer data for next image...");
 
-#ifndef SOFTWARE_ONLY_MODE
-    load_config_biases_kernels(0, 0); // we start already to load config and weigths for the next first layer so ZS will be ready to process the new image immediately
-#endif
-
     log_utilities::high("Preload completed");
     return (classification_result); // added one because ZERO is NULL in the arduino code
 }
@@ -181,8 +189,7 @@ int zs_driver::classify_image(int* l_image) {
 //It assumes input is between 0 and 255 and needs to be normalized between 0 and 1
 //The conversion is done in place directly on the class array to minimize data movement
 //Code is optimized for computational speed rather than readability
-void zs_driver::convert_input_image(int* l_image, int l_pixels_per_row, int l_num_row,
-        int l_total_num_pixel) {
+void zs_driver::convert_input_image(int* l_image, int l_num_row, int l_total_num_pixel) {
 
     int input_pixel_idx, input_pixel_idx_incr;
     input_pixel_idx = 0;
@@ -277,13 +284,8 @@ void zs_driver::load_config_biases_kernels(int layer_idx, int pass_idx) {
 }
 
 void zs_driver::load_image(std::vector<uint64_t> l_input) {
-    //Appending image load done at the end of the image
-    /* l_input.push_back(
-     pixel_formatter.format_word0((uint16_t) 1, (uint16_t) zs_parameters::REG_TYPE, (uint16_t) 1,
-     (uint16_t) zs_address_space::config_image_load_done_pulse));*/
-
     log_utilities::high("Starting image load, number of words to send: %d", l_input.size());
-    backend_if.write(l_input);
+    backend_if.write(&l_input);
 }
 
 bool zs_driver::read_network_from_file(std::string network_file_name) {

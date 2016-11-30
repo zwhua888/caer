@@ -57,6 +57,8 @@ class Axidma
 		const unsigned int DESTINATION_ADDR_OFFSET; //!< Memory offset that points to reserved memory space for S2MM data
 		const unsigned int SOURCE_ADDR_OFFSET;      //!< Memory offset that points to reserved memory space for MM2S data
 
+		const unsigned int max_write_transfer_length_bytes;
+
 		int whole_memory_pointer;
 		unsigned int* axidma_map_addr;
         uint64_t* source_addr;
@@ -161,7 +163,7 @@ class Axidma
          *  @param data vector that will be write to MM2S channel
          *  @return number of written bytes from the actual MM2S tranfer
          */
-        unsigned int write(std::vector<uint64_t> data);
+        unsigned int write(std::vector<uint64_t> *data);
 
         /** \brief Clear MM2S transfer flags to indicate that transfer synchronization has been detected
          */

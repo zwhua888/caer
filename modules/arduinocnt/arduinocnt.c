@@ -34,7 +34,6 @@ struct ASFilter_state {
 	uint16_t pos;
 	uint16_t lastcommand;
 	atomic_int_fast32_t decision[AVERAGEOVER];
-//RingBuffer dataTransfer;
 };
 
 typedef struct ASFilter_state *ASFilterState;
@@ -121,13 +120,10 @@ int majorityThread(void *ASFilter_state) {
 		}
 		if(current_dec != state->lastcommand){
 
-			printf("\n\n\\n####################### sending %d\n\n", current_dec);
+			caerLog(CAER_LOG_DEBUG, "ArduinoCNT", "####################### sending to arduino %d\n\n", current_dec);
 			serialport_write(state->fd, res);
 			state->lastcommand = current_dec;
 		}
-		//printf("\n####################### sending %d\n", current_dec);
-
-
 	}
 
 	return (thrd_success);
@@ -158,13 +154,6 @@ static bool caerArduinoCNTInit(caerModuleData moduleData) {
 		exit(1);
 	}
 	serialport_flush(state->fd);
-
-	/*state->dataTransfer = ringBufferInit(AVERAGEOVER);
-	 if (state->dataTransfer == NULL) {
-	 caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
-	 "ringbuffer failed to initialize");
-	 return (NULL);
-	 }*/
 
 	atomic_store(&state->pos, 0);
 	for (size_t i = 0; i < AVERAGEOVER; i++) {

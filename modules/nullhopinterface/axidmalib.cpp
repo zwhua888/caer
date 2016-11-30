@@ -2,7 +2,8 @@
 #define __AXIDMA_CPP__
 #include "axidmalib.hpp"
 #include <stdio.h>
-
+#include <exception>
+#include <stdexcept>
 Axidma::Axidma(unsigned int axidma_addr_offset, unsigned int source_addr_offset,
 		unsigned int destination_addr_offset) :
 		MM2S_CONTROL_REGISTER(0x00), MM2S_STATUS_REGISTER(0x04), MM2S_START_ADDRESS(
@@ -15,7 +16,7 @@ Axidma::Axidma(unsigned int axidma_addr_offset, unsigned int source_addr_offset,
 				0x00000020), DMADECERR(0x00000040), SGINTERR(0x00000100), SGSLVERR(
 				0x00000200), SGDECERR(0x00000400), IOC_IRQ(0x00001000), DLY_IRQ(
 				0x00002000), ERR_IRQ(0x00004000), MAX_READ_TRANSFER_LENGTH(
-				0x1FFF) {
+				0x1FFF),max_write_transfer_length_bytes((unsigned int) pow(2, 23)) {
 	whole_memory_pointer = open("/dev/mem", O_RDWR | O_SYNC); // Open /dev/mem which represents the whole physical memory
 	axidma_map_addr = (unsigned int *) mmap(NULL, 65535, PROT_READ | PROT_WRITE,
 			MAP_SHARED, whole_memory_pointer, AXIDMA_ADDR_OFFSET); // Memory map AXI Lite register block
@@ -25,8 +26,9 @@ Axidma::Axidma(unsigned int axidma_addr_offset, unsigned int source_addr_offset,
 	destination_addr = (uint64_t*) mmap(NULL,
 			AXIDMA_MEMORY_MAPPING_READ_SIZE_DEFINE, PROT_READ | PROT_WRITE,
 			MAP_SHARED, whole_memory_pointer, DESTINATION_ADDR_OFFSET); // Memory map destination address
-	axidma_channel_timeout_us = 10000000;
+	axidma_channel_timeout_us = 50*1000; //50 ms timeout
 	read_transfer_length_bytes = 0x100;
+
 }
 
 Axidma::~Axidma(void) {
@@ -39,7 +41,7 @@ bool Axidma::init(unsigned int trans_read_length_bytes) {
 	if (trans_read_length_bytes > MAX_READ_TRANSFER_LENGTH) {
 		fprintf(stderr, "Error: The maximum read transfer length is %dWords\n",
 				MAX_READ_TRANSFER_LENGTH);
-		return false;
+		return (false);
 	}
 
 	read_transfer_length_bytes = trans_read_length_bytes;
@@ -50,7 +52,7 @@ bool Axidma::init(unsigned int trans_read_length_bytes) {
 	set_dma_register_value(S2MM_DESTINATION_ADDRESS, DESTINATION_ADDR_OFFSET);
 	set_dma_register_value(S2MM_CONTROL_REGISTER, 0xf001);
 
-	return true;
+	return (true);
 }
 
 void Axidma::set_dma_register_value(int register_offset, unsigned int value) {
@@ -58,7 +60,7 @@ void Axidma::set_dma_register_value(int register_offset, unsigned int value) {
 }
 
 unsigned int Axidma::get_dma_register_value(int register_offset) {
-	return axidma_map_addr[register_offset >> 2];
+	return (axidma_map_addr[register_offset >> 2]);
 }
 
 void Axidma::print_mm2s_status() {
@@ -130,19 +132,19 @@ void Axidma::print_s2mm_status() {
 bool Axidma::check_mm2s_status(unsigned int chk_status) {
 	unsigned int status = get_dma_register_value(MM2S_STATUS_REGISTER);
 	if (chk_status == RUNNING && (status & HALTED) == 0)
-		return true;
+		return (true);
 	if (status & chk_status)
-		return true;
-	return false;
+		return (true);
+	return (false);
 }
 
 bool Axidma::check_s2mm_status(unsigned int chk_status) {
 	unsigned int status = get_dma_register_value(S2MM_STATUS_REGISTER);
 	if (chk_status == RUNNING && (status & HALTED) == 0)
-		return true;
+		return (true);
 	if (status & chk_status)
-		return true;
-	return false;
+		return (true);
+	return (false);
 }
 
 void Axidma::mm2s_pooling_sync(void) throw (AXIDMA_timeout_exception) {
@@ -188,28 +190,27 @@ void Axidma::stop(void) {
 	set_dma_register_value(MM2S_CONTROL_REGISTER, 0);
 }
 
-unsigned int Axidma::write(std::vector<uint64_t> data) {
-	//   printf("inside axidma write called\n");
-	unsigned int numBytes = data.size() * sizeof(uint64_t);
-	 // printf("got numBytes: %d\n", numBytes);
-	std::copy(data.begin(), data.end(), source_addr);
-	 // printf("std:copy done\n");
-	if ((numBytes > 0) && (numBytes <= (unsigned int) pow(2, 23))) {
-		//  printf("inside IF\n");
+unsigned int Axidma::write(std::vector<uint64_t> * data) {
+
+	unsigned int numBytes = data->size() * sizeof(uint64_t);
+
+	std::copy(data->begin(), data->end(), source_addr);
+
+	if ((numBytes > 0) && (numBytes <= max_write_transfer_length_bytes)) {
+
 		source_addr[0] |= ((uint64_t) 1 & 0xFF) << 50;
 		source_addr[0] |= ((uint64_t) (read_transfer_length_bytes
 				/ sizeof(uint64_t)) & 0xFFF) << 51; //We use 8Bytes words in the S2MM bus
-		//      printf("Source assigned\n");
+
 		set_dma_register_value(MM2S_LENGTH, numBytes);
-		 //   printf("DMA register assigned\n");
 		mm2s_pooling_sync();
-		 //  printf("pooling sync done\n");
 		clear_mm2s_flags();
-		 //  printf("clearflag done\n");
-		return numBytes;
+		return (numBytes);
+	} else {
+	    throw std::runtime_error("Write data on AXI bus over maximum transfer size");
 	}
 
-	return 0;
+	return (0);
 }
 
 void Axidma::clear_mm2s_flags(void) {
@@ -218,30 +219,13 @@ void Axidma::clear_mm2s_flags(void) {
 }
 
 unsigned int Axidma::read(std::vector<uint64_t> *data) {
-	//  printf("read call\n");
 	set_dma_register_value(S2MM_LENGTH, read_transfer_length_bytes);
-	//  printf("set_dma_register_value done\n");
 	s2mm_pooling_sync();
-	//  printf("sync done\n");
 	data->insert(data->end(), destination_addr,
 			destination_addr + read_transfer_length_bytes / sizeof(uint64_t));
-	/*
-	 for (int data_idx = 0; data_idx < data->size(); data_idx ++){
-	 uint64_t* data_ptr = data->data();
-	 uint64_t data_value = data_ptr[data_idx];
-	 std::bitset<64> bit_repr(data_value);
 
-	 if (bit_repr[63] == 1) {
-	 std::string string_bit_repr = bit_repr.to_string();
-
-	 log_utilities::debug("INREAD - data_idx %d - word %s", data_idx, string_bit_repr.c_str());
-	 }
-	 }*/
-
-	// printf("insert data done\n");
 	clear_s2mm_flags();
-	//  printf("clear flags done\n");
-	return data->size();
+	return (data->size());
 }
 
 void Axidma::clear_s2mm_flags(void) {
@@ -250,7 +234,7 @@ void Axidma::clear_s2mm_flags(void) {
 }
 
 unsigned int Axidma::get_axidma_channel_timeout(void) {
-	return axidma_channel_timeout_us;
+	return (axidma_channel_timeout_us);
 }
 
 void Axidma::set_axidma_channel_timeout(unsigned int value) {
@@ -258,7 +242,7 @@ void Axidma::set_axidma_channel_timeout(unsigned int value) {
 }
 
 unsigned int Axidma::get_read_transfer_length_bytes(void) {
-	return read_transfer_length_bytes;
+	return (read_transfer_length_bytes);
 }
 
 #endif

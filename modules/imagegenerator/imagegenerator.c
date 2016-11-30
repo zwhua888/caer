@@ -14,6 +14,11 @@
 #include <string.h>
 #include <stdio.h>
 
+//#define TIMING
+#ifdef TIMING
+#include <time.h>
+#endif
+
 #include "main.h"
 #include <libcaer/events/polarity.h>
 
@@ -125,7 +130,7 @@ static void caerImageGeneratorExit(caerModuleData moduleData) {
 //This function implement 3sigma normalization and converts the image in nullhop format
 static bool normalize_image_map_sigma(imagegeneratorState state, int * hist, int size) {
 
-    int sum, count = 0;
+    int sum = 0, count = 0;
     for (int i = 0; i < size; i++) {
         for (int j = 0; j < size; j++) {
             if (state->ImageMap[i][j] != 0) {
@@ -187,7 +192,8 @@ static bool normalize_image_map_sigma(imagegeneratorState state, int * hist, int
                     f = 0;
                 }
 
-                hist[linindex] = floor(f); //shift by 256 included in previous computations
+                //hist[linindex] = floor(f); //shift by 256 included in previous computations
+                hist[linindex] = 256; //TODO TO REMOVE!!!!!!!!!!!!!!!!!!
             }
         }
     }
@@ -316,52 +322,24 @@ static void caerImageGeneratorRun(caerModuleData moduleData, size_t argsNumber, 
             //If we saw enough spikes, generate Image from ImageMap.
             if (state->spikeCounter >= state->numSpikes) {
 
-                printf("generating image with numspikes %d\n", state->numSpikes);
+               // printf("generating image with numspikes %d\n", state->numSpikes);
                 haveimg[0] = true; // we got an image to classify
 
-                //Code snippet to test normalization with fixed input
-                /*for (int col_idx = 0; col_idx < state->sizeX; col_idx++) {
-                 for (int row_idx = 0; row_idx < state->sizeY; row_idx++) {
-                 state->ImageMap[col_idx][row_idx] = 256;
-                 }
-                 }*/
-                /*
-                 FILE*fp = fopen("test.txt","r");
+#ifdef TIMING
+                clock_t start = clock(), diff;
+#endif
 
-                 if (fp == NULL) {
-
-                 printf("Cant open the file\n");
-                 exit(-1);
-
-                 }
-                 int col_idx, row_idx;
-                 col_idx = 0;
-                 row_idx = 0;
-                 for (int read_idx = 0; read_idx < 64*64; read_idx++){
-                 //  printf("Reading pixel %d\n", read_idx);
-                 float pixel;
-                 uint64_t scaled_pixel;
-                 //   printf("1\n");
-                 fscanf(fp, "%f\n", &pixel);
-                 //    printf("2\n");
-                 scaled_pixel = floor(pixel*256);
-                 //    printf("3\n");
-                 state->ImageMap[col_idx][row_idx] = scaled_pixel;
-                 //    printf("4\n");
-                 col_idx++;
-                 if (col_idx == 64){
-                 col_idx = 0;
-                 row_idx++;
-                 }
-
-                 }
-                 printf("File read done\n");
-                 */
                 if (!normalize_image_map_sigma(state, hist, CLASSIFY_IMG_SIZE)) {
                     caerLog(CAER_LOG_ERROR, moduleData->moduleSubSystemString,
                             "Failed to normalize image map with 3 sigma range.");
                     return;
                 };
+#ifdef TIMING
+                diff = clock() - start;
+
+                double time_spent = (double)( diff ) / CLOCKS_PER_SEC;
+                printf("Time taken %f second\n ", time_spent);
+#endif
 
                 //reset values
                 for (int col_idx = 0; col_idx < state->sizeX; col_idx++) {

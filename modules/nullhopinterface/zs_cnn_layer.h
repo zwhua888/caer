@@ -21,7 +21,7 @@ class zs_cnn_layer {
       int get_pixels_per_row();
       int get_input_num_rows();
 
-       std::vector<uint64_t> get_load_array(int pass_idx);
+       std::vector<uint64_t> *get_load_array(int pass_idx);
 
       int num_output_columns;
       int num_output_rows;

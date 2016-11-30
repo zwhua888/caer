@@ -395,7 +395,7 @@ void zs_cnn_layer::set_layer_config(FILE*l_net_file, int l_layer_idx) {
 
 	int l_compression_enabled, l_kernel_size, l_num_input_channels,
 			l_num_input_columns, l_num_input_rows, l_num_output_channels,
-			l_pooling_enabled, l_relu_enabled, l_padding, l_weight, l_bias,
+			l_pooling_enabled, l_relu_enabled, l_padding, l_bias,
 			l_num_biases, l_num_weight;
 
 	log_utilities::debug("Reading layer parameters...");
@@ -477,8 +477,8 @@ int zs_cnn_layer::get_num_pass() {
 	return (num_pass);
 }
 
-std::vector<uint64_t> zs_cnn_layer::get_load_array(int pass_idx) {
-	return (load_array[pass_idx]);
+std::vector<uint64_t>* zs_cnn_layer::get_load_array(int pass_idx) {
+	return (&load_array[pass_idx]);
 }
 
 #endif

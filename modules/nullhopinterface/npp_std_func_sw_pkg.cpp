@@ -305,12 +305,10 @@ inline std::vector<int64_t> decompress_sm_image_as_linear_vector(std::vector<uin
 
     uint16_t current_sm = 0;
     int in_word_idx = 0;
-    int row = 0;
-    int column = 0;
-    int channel = 0;
     int sm_position = sm_length;
     int input_word_idx = 0; //the full get_next_word function updates also input_idx, but in this case we dont need it so we save it into an unused variable
-
+    int input_size;
+    input_size = input.size();
     do {
         int16_t next_word;
         std::tie(next_word, input_word_idx, in_word_idx) = get_next_word(input, input_word_idx,
@@ -324,7 +322,7 @@ inline std::vector<int64_t> decompress_sm_image_as_linear_vector(std::vector<uin
             if (current_sm == 0) { //new sm is 0
 
                 //It means there are zeros at the end of the input array so we dont need to update the SM and we have done
-                if (input_word_idx == input.size()) {
+                if (input_word_idx == input_size) {
                     break;
                 }
 
@@ -357,7 +355,7 @@ inline std::vector<int64_t> decompress_sm_image_as_linear_vector(std::vector<uin
 
                         if (current_sm == 0) { //new sm is 0
                             //It means there are zeros at the end of the input array so we dont need to update the SM and we have done
-                            if (input_word_idx == input.size()) {
+                            if (input_word_idx == input_size) {
                                 break;
                             }
                             for (int sm_idx = sm_position; sm_idx < sm_length; sm_idx++) {
@@ -369,7 +367,7 @@ inline std::vector<int64_t> decompress_sm_image_as_linear_vector(std::vector<uin
                 }
             }
         }
-    } while (input_word_idx < input.size());
+    } while (input_word_idx < input_size);
 
 
     log_utilities::debug("Decompression done");

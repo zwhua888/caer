@@ -1,6 +1,9 @@
 #ifndef __ZS_BACKEND_INTERFACE__
 #define __ZS_BACKEND_INTERFACE__
 
+
+
+
 #include "npp_log_utilities.h"
 
 #include "zs_backend_interface.h"
@@ -12,12 +15,23 @@
 #include <bitset>
 #include <exception>
 #include <stdexcept>
+
 #ifdef FPGA_MODE
 #include "zsaxidmalib.hpp"
-//#include "zsaxidmalib.cpp"
-//#include "axidmalib.cpp"
 #include "axidmalib.hpp"
 #endif
+
+#define FPGA_MODE //TODO REPLACE
+
+#include "stdio.h"
+#include "iostream"
+#include "string.h"
+#include <vector>
+
+#ifdef FPGA_MODE
+#include "zsaxidmalib.hpp"
+#endif
+
 
 #ifdef RTL_MODE
 #include "svdpi.h"
@@ -40,8 +54,6 @@ zs_backend_interface::zs_backend_interface() {
 #endif
 
 #ifdef FPGA_MODE
-    //axi_interface = ZS_axidma();
-    //axi_interface.reset();
     log_utilities::medium("initializing axi bus");
     axi_interface.init(axi_parameters::AXI_TRANSFER_LENGTH_BYTES);
     log_utilities::medium("axi bus initialized");
@@ -124,10 +136,10 @@ void zs_backend_interface::append_new_rtl_word(const uint64_t new_word) {
 }
 #endif
 
-bool zs_backend_interface::write(std::vector<uint64_t> array) {
+bool zs_backend_interface::write(std::vector<uint64_t>* array) {
     log_utilities::high("SW Backend waiting for write to complete...");
     //These functions are called only if write to file flags are enables
-    print_sw_to_zs_words(array);
+    print_sw_to_zs_words(*array);
 
 #ifdef FPGA_MODE
     axi_interface.write(array);
@@ -159,7 +171,7 @@ std::vector<uint64_t> zs_backend_interface::read() {
 #ifdef FPGA_MODE
     if (axi_interface.readLayer(&read_array) == -1) {
 
-        throw  std::runtime_error("Error in axi read");
+        throw std::runtime_error("Error in axi read");
 
     }
 #endif

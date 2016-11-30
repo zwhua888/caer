@@ -28,8 +28,8 @@ class ZS_axidma
          *
          *  @return number of bytes written to ZS
          */
-        unsigned int write_to_axidma(void);
-        std::list< std::vector<uint64_t> > write_data;
+        void write_to_axidma(void);
+        std::list< std::vector<uint64_t>> write_data;
         bool write_thread_running;
 
         //void read_from_axidma(void);
@@ -66,7 +66,7 @@ class ZS_axidma
          *  Add a new vector to write_data list to be written to ZS
          *  @param data vector to be added to write_data list
          */
-        void write(std::vector<uint64_t> data);
+        void write(std::vector<uint64_t>* data);
 
         /** \brief Bblocking read operation.
          *
@@ -74,7 +74,7 @@ class ZS_axidma
          *  @param layer_data vector pointer where all data come out from ZS will be copied
          *  @return number of bytes read from zs in the actual layer
          */
-        unsigned int readLayer(std::vector<uint64_t> *layer_data);
+        int readLayer(std::vector<uint64_t> *layer_data);
 
         /** \brief Write thread to be non-blocking write operations
          */
