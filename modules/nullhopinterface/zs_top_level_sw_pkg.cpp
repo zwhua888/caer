@@ -96,6 +96,8 @@ namespace zs_axi_bits {
 namespace axi_parameters {
    static const int AXI_WIDTH = 64;
    static const unsigned int AXI_TRANSFER_LENGTH_BYTES = 0x400;
+
+
    static const unsigned int AXI_TRANSFER_LENGTH_WORDS = axi_parameters::AXI_TRANSFER_LENGTH_BYTES
             / (axi_parameters::AXI_WIDTH / 8);
    static const uint64_t BURST_VALUE_SHIFTED = (uint64_t) ((uint64_t) AXI_TRANSFER_LENGTH_WORDS)

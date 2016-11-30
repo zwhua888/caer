@@ -192,8 +192,8 @@ static bool normalize_image_map_sigma(imagegeneratorState state, int * hist, int
                     f = 0;
                 }
 
-                //hist[linindex] = floor(f); //shift by 256 included in previous computations
-                hist[linindex] = 256; //TODO TO REMOVE!!!!!!!!!!!!!!!!!!
+                hist[linindex] = floor(f); //shift by 256 included in previous computations
+              //  hist[linindex] = 256; //TODO TO REMOVE!!!!!!!!!!!!!!!!!!
             }
         }
     }
