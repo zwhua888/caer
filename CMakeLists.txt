@@ -112,8 +112,8 @@ ADD_DEFINITIONS(-DCM_BUILD_DIR=${CM_BUILD_DIR} -DCM_SHARE_DIR=${CM_SHARE_DIR})
 
 # C11 standard needed (atomics, threads)
 IF (CC_GCC OR CC_CLANG)
-	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
-	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3 -pthread")
+	SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11 -O3 -flto")
+	SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3 -pthread -flto")
 ENDIF()
 
 # Enable all warnings for GCC / Clang
@@ -184,7 +184,7 @@ ENDIF()
 
 IF (OS_UNIX AND NOT OS_MACOSX)
 	# Add --as-needed to linker flags for executables.
-	SET(CMAKE_EXE_LINKER_FLAGS "-Wl,--as-needed")
+	SET(CMAKE_EXE_LINKER_FLAGS "-Wl,--as-needed,-flto")
 ENDIF()
 
 # Add math support

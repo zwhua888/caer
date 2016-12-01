@@ -25,6 +25,7 @@ zs_driver::zs_driver(std::string network_file_name = "") {
     total_num_layers = 0;
     total_num_processed_images = 0;
     time_accumulator = 0;
+    end_previous_frame = std::chrono::high_resolution_clock::now();
     log_utilities::none("Proceeding with network loading, network is: %s",
             network_file_name.c_str());
 
@@ -134,17 +135,22 @@ int zs_driver::classify_image(int* l_image) {
 
     //  printf("Time FC layers: %lf ms \n", duration);
 
-    duration = std::chrono::duration_cast < std::chrono::milliseconds
-            > (t_fc_end - t_computation_start).count();
+    duration = std::chrono::duration_cast < std::chrono::milliseconds > (t_fc_end - t_computation_start).count();
     //  printf("Total processing time: %lf ms \n", duration);
+    double fps = (1.0f/(std::chrono::duration_cast < std::chrono::microseconds > (t_fc_end - end_previous_frame).count()))*1000.0f*1000.0f;
+    end_previous_frame = t_fc_end;
 
     time_accumulator = time_accumulator + duration;
     double average_duration = time_accumulator / (total_num_processed_images + 1);
-    printf("Average processing time: %lf ms \n", average_duration);
-    if (total_num_processed_images % 200 == 0) {
-        printf("\n\n****Checkpoint %d\n\n", total_num_processed_images);
 
-    }
+
+  //  printf("Average processing time: %lf ms - system FPS: %lf\n", average_duration,fps );
+
+
+ //   if (total_num_processed_images % 200 == 0) {
+   //     printf("\n\n****Checkpoint %d\n\n", total_num_processed_images);
+
+    //}
 
 #endif
 

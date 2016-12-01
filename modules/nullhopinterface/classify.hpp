@@ -53,5 +53,6 @@ private:
     bool read_network_from_file(std::string network_file_name);
 
     double time_accumulator;
+    std::chrono::high_resolution_clock::time_point end_previous_frame;
 
 };

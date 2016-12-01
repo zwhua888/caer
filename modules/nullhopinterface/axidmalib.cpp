@@ -194,6 +194,11 @@ unsigned int Axidma::write(std::vector<uint64_t> * data) {
 
 	unsigned int numBytes = data->size() * sizeof(uint64_t);
 
+	const unsigned int transfer_size_words = 192;
+	const unsigned int transfer_size_bytes = transfer_size_words * sizeof(uint64_t);
+
+
+
 	std::copy(data->begin(), data->end(), source_addr);
 
 	if ((numBytes > 0) && (numBytes <= max_write_transfer_length_bytes)) {

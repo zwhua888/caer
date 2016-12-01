@@ -8,28 +8,36 @@ void* write_thread_routine(void* arg) {
     ZS_axidma* zsaxidma = (ZS_axidma*) arg;
     while (zsaxidma->is_write_thread_running()) {
 
-
         if (!zsaxidma->write_data.empty()) {
             try {
-                pthread_mutex_lock (&zsaxidma->write_mxt);
+                //Here the mutex act just like a semaphore
+                pthread_mutex_lock(&zsaxidma->write_mxt);
+                pthread_mutex_unlock(&zsaxidma->write_mxt);
+
+                //Here we dont need to keep the mutex lock: data inside front are fine thanks to previous semaphore
+                //And now we are just reading from the list, not modifying it
                 zsaxidma->axidma.write(&zsaxidma->write_data.front());
+
+                //Here we modify the list, so we need to lock it
+                pthread_mutex_lock(&zsaxidma->write_mxt);
                 zsaxidma->write_data.pop_front();
                 pthread_mutex_unlock(&zsaxidma->write_mxt);
             } catch (AXIDMA_timeout_exception& ex) {
                 printf(ex.what());
                 printf("Write thread timeout\n");
-                exit(-1); //TODO REMOVE ME
+               // exit(-1); //TODO REMOVE ME
                 zsaxidma->stop();
                 zsaxidma->init(zsaxidma->axidma.get_read_transfer_length_bytes());
             } catch (std::bad_alloc& ba) {
-                printf("bad_alloc caught: %s. List size --> %d\n", ba.what(), zsaxidma->write_data.size());
+                printf("bad_alloc caught: %s. List size --> %d\n", ba.what(),
+                        zsaxidma->write_data.size());
             }
         } else {
             //This microsleep is necessary to avoid the loop to iterate infinitely locking the CPU
             //Notice that it is MANDATORY keep it here to allow the mutex inside the if{} statement, otherwise the system will lock
             //into an infinite loop. If mutex are moved outside the if, the usleep can be remove but performance decrease will occour
             //value obtained trying multiple times
-            usleep(75);
+            usleep(70);
         }
     }
 
@@ -39,7 +47,6 @@ void* write_thread_routine(void* arg) {
 }
 
 void ZS_axidma::write(std::vector<uint64_t> *data) {
-
     pthread_mutex_lock(&write_mxt);
     write_data.push_back(*data);
     pthread_mutex_unlock(&write_mxt);
@@ -84,8 +91,9 @@ int ZS_axidma::readLayer(std::vector<uint64_t> *layer_data) {
             axidma.read(layer_data);
         } catch (AXIDMA_timeout_exception& ex) {
             printf(ex.what());
+            printf("Read thread timeout\n");
             stop();
-            exit(-1); //TODO REMOVE ME
+           // exit(-1); //TODO REMOVE ME
             init(axidma.get_read_transfer_length_bytes());
             return (-1);
         }

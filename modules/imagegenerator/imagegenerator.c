@@ -169,8 +169,7 @@ static bool normalize_image_map_sigma(imagegeneratorState state, int * hist, int
         range = numSDevs * sig * (1.0f / 256.0f); //256 included here for nullhop reshift
         halfrange = 0;
     } else {
-        range = numSDevs * sig * 2 * (1.0f / 256.0f);
-        ; //256 included here for nullhop reshift
+        range = numSDevs * sig * 2 * (1.0f / 256.0f);//256 included here for nullhop reshift
         halfrange = numSDevs * sig;
     }
 
@@ -192,8 +191,8 @@ static bool normalize_image_map_sigma(imagegeneratorState state, int * hist, int
                     f = 0;
                 }
 
-                hist[linindex] = floor(f); //shift by 256 included in previous computations
-              //  hist[linindex] = 256; //TODO TO REMOVE!!!!!!!!!!!!!!!!!!
+                //hist[linindex] = floor(f); //shift by 256 included in previous computations
+              hist[linindex] = 256; //TODO TO REMOVE!!!!!!!!!!!!!!!!!!
             }
         }
     }
